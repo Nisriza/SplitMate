@@ -6,11 +6,13 @@
 export interface Roommate {
   id: string;
   name: string;
-  email: string;
+  username: string; // Used for login
+  password?: string; // Used for password authentication
   avatarColor: string; // Tailwind color class like 'bg-indigo-500'
   bankName?: string;  // e.g. Maybank, CIMB, Touch n Go eWallet
   bankAccount?: string; // bank or account number
   qrType?: 'duitnow' | 'bank' | 'other';
+  qrCodeDataUrl?: string; // Base64 of actual uploaded QR photo code
 }
 
 export interface Group {
@@ -19,6 +21,7 @@ export interface Group {
   type: 'roommates' | 'housemates';
   houseNo: string;
   roommateIds: string[];
+  joinCode: string; // Invite code to join the household group
 }
 
 export interface Expense {

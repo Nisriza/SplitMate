@@ -216,21 +216,7 @@ export const PaymentStatusPage: React.FC<PaymentStatusPageProps> = ({
     }
   };
 
-  // Quick preset sample slips
-  const sampleSlips = [
-    { label: "Maybank_Trf_Alex_RM300.pdf", recipientIndex: 0, amount: 300.00 },
-    { label: "TnG_eWallet_Jordan_RM150.pdf", recipientIndex: 1, amount: 150.00 },
-    { label: "CIMB_Clicks_Taylor_RM100.pdf", recipientIndex: 2, amount: 100.00 },
-  ];
 
-  const handleTriggerPreset = (index: number) => {
-    // Select valid other roommate in context
-    const validOthers = roommates.filter(r => r.id !== currentRoommate.id);
-    const slip = sampleSlips[index];
-    // Map recipient index to a roommate if possible, otherwise use fallback first index
-    const targetRoommate = validOthers[slip.recipientIndex % validOthers.length] || validOthers[0] || roommates[0];
-    startScanningAnimation(slip.label, targetRoommate.id, slip.amount);
-  };
 
   const handleCommitOcrPayment = () => {
     if (!detectedAmount || !detectedRecipientId) return;
@@ -278,14 +264,6 @@ export const PaymentStatusPage: React.FC<PaymentStatusPageProps> = ({
             Track off-app money transfers, approve receipts, and scan PDF files to auto-balance household accounts.
           </p>
         </div>
-        <button
-          id="toggle-transfer-form-btn"
-          onClick={() => setShowForm(!showForm)}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs rounded-xl shadow-md transition-all cursor-pointer flex items-center self-start sm:self-auto"
-        >
-          <PlusCircle className="w-4 h-4 mr-1.5" /> 
-          {showForm ? 'Hide Forms' : 'Open Settle Hub'}
-        </button>
       </div>
 
       {ocrCompletedSuccessMsg && (
@@ -298,8 +276,8 @@ export const PaymentStatusPage: React.FC<PaymentStatusPageProps> = ({
       {/* Grid: Form to Log and Logs detail listings */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
-        {/* Transfer form column (Toggled/Side columns) */}
-        <div className={`lg:col-span-1 space-y-6 ${showForm ? 'block' : 'hidden lg:block'}`}>
+        {/* Transfer form column (Always visible) */}
+        <div className="lg:col-span-1 space-y-6 block">
           <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-7 shadow-xs space-y-5">
             
             {/* Segmented Tab Swapper */}
@@ -378,25 +356,7 @@ export const PaymentStatusPage: React.FC<PaymentStatusPageProps> = ({
                   </label>
                 </div>
 
-                {/* Pre-made Local OCR Test Samples */}
-                <div className="space-y-1.5 bg-white border border-slate-100 p-3 rounded-2xl">
-                  <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block mb-1">
-                    💡 Quick Sandbox Simulation Slips:
-                  </span>
-                  <div className="grid grid-cols-1 gap-1.5">
-                    {sampleSlips.map((s, idx) => (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={() => handleTriggerPreset(idx)}
-                        className="w-full text-left bg-slate-50 hover:bg-blue-50/50 p-2 rounded-xl text-[11px] font-mono text-slate-650 flex justify-between items-center transition-all cursor-pointer border border-transparent hover:border-blue-200/50 group"
-                      >
-                        <span className="truncate max-w-[150px] group-hover:text-blue-700 font-medium">📄 {s.label}</span>
-                        <span className="font-bold text-slate-800 text-right">RM {s.amount.toFixed(2)}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
+
 
                 {/* Interactive Scanner logs overlay */}
                 {isScanning && (

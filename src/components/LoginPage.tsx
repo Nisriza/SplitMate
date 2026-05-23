@@ -6,13 +6,13 @@
 import React, { useState } from 'react';
 import { 
   UserPlus, 
-  ArrowRight, 
   Lock, 
   Building2, 
   Smile, 
-  Mail, 
   Sparkles,
-  Info
+  LogIn,
+  Check,
+  User
 } from 'lucide-react';
 import { Roommate, Group } from '../types';
 
@@ -23,416 +23,355 @@ interface LoginPageProps {
   onSelectUser: (user: Roommate) => void;
   onAddRoommate: (
     name: string,
-    email: string,
-    avatarColor: string,
-    bankName: string,
-    bankAccount: string,
-    groupChoice: 'join' | 'create',
-    existingGroupId?: string,
-    newGroupName?: string,
-    newHouseNo?: string
+    username: string,
+    password: string,
+    avatarColor: string
   ) => void;
   onSelectGroup: (groupId: string) => void;
 }
 
 const AVATAR_COLORS = [
-  'bg-indigo-500',
-  'bg-emerald-500',
-  'bg-blue-500',
-  'bg-amber-500',
-  'bg-violet-500',
-  'bg-rose-500',
-  'bg-sky-500',
-  'bg-fuchsia-500'
+  'bg-blue-600',
+  'bg-emerald-600',
+  'bg-indigo-600',
+  'bg-amber-600',
+  'bg-violet-600',
+  'bg-rose-600',
+  'bg-sky-600',
+  'bg-fuchsia-600'
 ];
 
 export const LoginPage: React.FC<LoginPageProps> = ({
   roommates,
   groups,
-  activeGroupId,
   onSelectUser,
   onAddRoommate,
   onSelectGroup,
 }) => {
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [chosenColor, setChosenColor] = useState(AVATAR_COLORS[0]);
-  const [bankName, setBankName] = useState('Maybank');
-  const [bankAccount, setBankAccount] = useState('');
-  const [groupChoice, setGroupChoice] = useState<'join' | 'create'>('join');
-  const [existingId, setExistingId] = useState(activeGroupId);
-  const [newGroupName, setNewGroupName] = useState('');
-  const [newHouseNo, setNewHouseNo] = useState('');
+  // Tabs: 'login' | 'register'
+  const [activeTab, setActiveTab] = useState<'login' | 'register'>('login');
 
-  const [isRegistering, setIsRegistering] = useState(false);
+  // Sign in states
+  const [loginUsername, setLoginUsername] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const [loginSuccessMsg, setLoginSuccessMsg] = useState('');
+
+  // Register Form States
+  const [name, setName] = useState('');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [chosenColor, setChosenColor] = useState(AVATAR_COLORS[0]);
   const [errorMsg, setErrorMsg] = useState('');
 
-  const activeGroup = groups.find(g => g.id === activeGroupId) || groups[0];
+  // Handle username manual login
+  const handleLoginSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginError('');
+    setLoginSuccessMsg('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+    const trimmedUser = loginUsername.trim().toLowerCase();
+    if (!trimmedUser) {
+      setLoginError('Please enter your username');
+      return;
+    }
+
+    const matchedUser = roommates.find(r => (r.username || '').toLowerCase() === trimmedUser);
+    if (matchedUser) {
+      // If roommate has a password, verify it
+      if (matchedUser.password && matchedUser.password !== loginPassword) {
+        setLoginError('Incorrect password! Please verify your password and try again.');
+        return;
+      }
+
+      // Find what group they belong to, if any
+      const groupOfUser = groups.find(g => g.roommateIds.includes(matchedUser.id));
+      if (groupOfUser) {
+        onSelectGroup(groupOfUser.id);
+      }
+      onSelectUser(matchedUser);
+    } else {
+      setLoginError('This username is not registered yet! Please sign up under the Register tab first.');
+    }
+  };
+
+  // Handle new registrations
+  const handleRegisterSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
+    setLoginSuccessMsg('');
 
-    if (!name.trim()) {
-      setErrorMsg('Please enter a name');
+    const trimmedName = name.trim();
+    const trimmedUser = username.trim().toLowerCase();
+
+    if (!trimmedName) {
+      setErrorMsg('Please enter your display name');
       return;
     }
-    if (!email.trim() || !email.includes('@')) {
-      setErrorMsg('Please enter a valid email address');
+    if (!trimmedUser) {
+      setErrorMsg('Please choose a username');
       return;
     }
-    if (!bankAccount.trim()) {
-      setErrorMsg('Please configure a valid settlements account number for housemate clearing');
+    if (trimmedUser.length < 3) {
+      setErrorMsg('Username must be at least 3 characters');
+      return;
+    }
+    if (!password) {
+      setErrorMsg('Please set a login password');
       return;
     }
 
-    if (groupChoice === 'create') {
-      if (!newGroupName.trim()) {
-        setErrorMsg('Please input a name for your new household unit');
-        return;
-      }
-      if (!newHouseNo.trim()) {
-        setErrorMsg('Please input a unit / house tracking code (e.g. Block A-10-02)');
-        return;
-      }
+    // Check if username already exists
+    if (roommates.some(r => (r.username || '').toLowerCase() === trimmedUser)) {
+      setErrorMsg('This username is already taken. Try another!');
+      return;
     }
 
     onAddRoommate(
-      name.trim(),
-      email.trim(),
-      chosenColor,
-      bankName.trim(),
-      bankAccount.trim(),
-      groupChoice,
-      groupChoice === 'join' ? existingId : undefined,
-      groupChoice === 'create' ? newGroupName.trim() : undefined,
-      groupChoice === 'create' ? newHouseNo.trim() : undefined
+      trimmedName,
+      trimmedUser,
+      password,
+      chosenColor
     );
+
+    // Switch to login page & set success message
+    setLoginUsername(trimmedUser);
+    setLoginPassword('');
+    setLoginSuccessMsg(`🎉 Success! Account "${trimmedName}" was created successfully. Please sign in below using your password!`);
+    setActiveTab('login');
 
     // Reset Form
     setName('');
-    setEmail('');
-    setBankName('Maybank');
-    setBankAccount('');
-    setGroupChoice('join');
-    setNewGroupName('');
-    setNewHouseNo('');
+    setUsername('');
+    setPassword('');
     setChosenColor(AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)]);
-    setIsRegistering(false);
   };
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-linear-to-b from-blue-50/50 via-white to-slate-50">
-      <div className="max-w-md w-full space-y-8">
+    <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center py-10 px-4 sm:px-6 lg:px-8 bg-linear-to-b from-slate-50 via-white to-blue-50/20">
+      <div className="max-w-md w-full space-y-6">
         
-        {/* Brand visual header */}
-        <div className="text-center">
-          <div className="mx-auto h-16 w-16 flex items-center justify-center rounded-2xl bg-gradient-to-tr from-blue-600 to-sky-400 text-white shadow-xl shadow-blue-100 mb-4 animate-bounce">
-            <Building2 className="w-8 h-8" />
+        {/* Unified Visual Brand Logo */}
+        <div className="text-center space-y-2 animate-fade-in">
+          <div className="mx-auto h-14 w-14 flex items-center justify-center rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-550 text-white shadow-lg shadow-blue-150 relative overflow-hidden group">
+            <Building2 className="w-7 h-7 relative z-10 transition-transform group-hover:scale-110" />
+            <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
           </div>
-          <h2 className="font-display font-bold text-3xl tracking-tight text-slate-900">
-            Welcome to Split<span className="text-blue-600">Mate</span>
+          <h2 className="font-display font-black text-3xl tracking-tight text-slate-850">
+            Split<span className="text-blue-600">Mate</span>
           </h2>
-          <p className="mt-2 text-sm text-slate-500">
-            A frictionless shared expense system for modern households. Keep roommate split records fair, tidy and clear.
+          <p className="text-slate-500 text-xs max-w-sm mx-auto">
+            The frictionless, transparent shared expense system for modern suites. Balance accounts, track bills, and stay square.
           </p>
         </div>
 
-        {/* Group selector context */}
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-          <label className="block text-xs font-mono font-bold text-slate-400 uppercase tracking-wider mb-2">
-            Active Household Context
-          </label>
-          <select
-            id="group-select-login"
-            className="w-full bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-lg text-sm p-2.5 font-medium transition-all focus:outline-hidden focus:ring-2 focus:ring-blue-500 cursor-pointer"
-            value={activeGroupId}
-            onChange={(e) => onSelectGroup(e.target.value)}
-          >
-            {groups.map((group) => (
-              <option key={group.id} value={group.id}>
-                📍 {group.name} ({group.houseNo})
-              </option>
-            ))}
-          </select>
-          <div className="mt-2 flex items-center text-xs text-slate-400 space-x-1">
-            <Info className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" />
-            <span>Select/create group inside dashboard once logged in.</span>
+        {/* Central Switcher & Control Panel Card */}
+        <div className="bg-white rounded-3xl shadow-xl shadow-slate-100/80 border border-slate-200/80 overflow-hidden">
+          
+          {/* Segmented Sign In vs Register Tab Controller Selector */}
+          <div className="grid grid-cols-2 bg-slate-50/80 border-b border-slate-105 p-1.5">
+            <button
+              type="button"
+              id="tab-select-login"
+              onClick={() => {
+                setActiveTab('login');
+                setLoginError('');
+                setErrorMsg('');
+              }}
+              className={`flex items-center justify-center gap-1.5 py-3 rounded-2xl text-xs font-bold tracking-tight transition-all cursor-pointer ${
+                activeTab === 'login'
+                  ? 'bg-white text-blue-600 shadow-sm'
+                  : 'text-slate-400 hover:text-slate-700'
+              }`}
+            >
+              <LogIn className="w-4 h-4" />
+              Sign In
+            </button>
+            <button
+              type="button"
+              id="tab-select-register"
+              onClick={() => {
+                setActiveTab('register');
+                setLoginError('');
+                setErrorMsg('');
+              }}
+              className={`flex items-center justify-center gap-1.5 py-3 rounded-2xl text-xs font-bold tracking-tight transition-all cursor-pointer ${
+                activeTab === 'register'
+                  ? 'bg-white text-blue-600 shadow-sm'
+                  : 'text-slate-400 hover:text-slate-700'
+              }`}
+            >
+              <UserPlus className="w-4 h-4" />
+              Register
+            </button>
           </div>
-        </div>
 
-        {/* Main interactive switcher */}
-        <div className="bg-white py-8 px-6 sm:px-10 rounded-2xl shadow-xl shadow-slate-100 border border-slate-100">
-          {!isRegistering ? (
-            <div className="space-y-6">
-              <div className="flex justify-between items-center pb-2 border-b border-slate-100">
-                <h3 className="font-display font-semibold text-lg text-slate-800">
-                  Select Your Profile
-                </h3>
-                <button
-                  id="toggle-register-btn"
-                  onClick={() => setIsRegistering(true)}
-                  className="inline-flex items-center text-xs font-semibold text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition-all cursor-pointer"
-                >
-                  <UserPlus className="w-3.5 h-3.5 mr-1" />
-                  Add New
-                </button>
-              </div>
+          <div className="p-6 sm:p-8 space-y-6">
 
-              {/* Roommate list */}
-              <div className="grid grid-cols-1 gap-3 max-h-72 overflow-y-auto pr-1">
-                {roommates.length === 0 ? (
-                  <p className="text-center text-sm text-slate-400 py-4">No roommates registered. Create one to begin!</p>
-                ) : (
-                  roommates.map((user) => (
-                    <button
-                      key={user.id}
-                      id={`login-user-${user.id}`}
-                      onClick={() => onSelectUser(user)}
-                      className="group flex items-center justify-between p-3.5 border border-slate-100 hover:border-blue-200 hover:bg-blue-50/50 rounded-xl transition-all text-left focus:outline-hidden focus:ring-2 focus:ring-blue-500 cursor-pointer"
-                    >
-                      <div className="flex items-center space-x-3">
-                        <div className={`w-10 h-10 rounded-xl ${user.avatarColor} text-white flex items-center justify-center font-display font-semibold text-sm shadow-xs group-hover:scale-105 transition-transform`}>
-                          {user.name[0]}
-                        </div>
-                        <div>
-                          <p className="font-semibold text-slate-800 group-hover:text-blue-700 transition-colors">
-                            {user.name}
-                          </p>
-                          <p className="text-xs text-slate-400 font-mono">
-                            {user.email}
-                          </p>
-                        </div>
-                      </div>
-                      <span className="text-slate-300 group-hover:text-blue-500 group-hover:translate-x-1 transition-all">
-                        <ArrowRight className="w-4 h-4" />
-                      </span>
-                    </button>
-                  ))
+            {/* BLOCK A: SIGN-IN FLOW */}
+            {activeTab === 'login' && (
+              <form onSubmit={handleLoginSubmit} className="space-y-4 animate-fade-in duration-200">
+                {loginSuccessMsg && (
+                  <div className="p-3 bg-emerald-50 border border-emerald-150 text-emerald-700 rounded-xl text-[11px] font-semibold animate-bounce-subtle">
+                    {loginSuccessMsg}
+                  </div>
                 )}
-              </div>
 
-              <div className="bg-slate-50 rounded-lg p-3 text-xs text-slate-500 flex items-start space-x-2">
-                <Lock className="w-4 h-4 text-emerald-500 mt-0.5 flex-shrink-0" />
-                <span>
-                  This sandbox simulated vault stores your splitting sessions locally in your browser. Feel free to log in as different roommates to evaluate their distinct financial perspectives!
-                </span>
-              </div>
-            </div>
-          ) : (
-            // Register Guest Roommate form
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="flex justify-between items-center pb-2 border-b border-slate-100">
-                <h3 className="font-display font-semibold text-lg text-slate-800">
-                  Join Suite as Housemate
-                </h3>
+                {loginError && (
+                  <div className="p-3 bg-rose-50 border border-rose-100 text-rose-600 rounded-xl text-[11px] font-semibold">
+                    ⚠️ {loginError}
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-500 mb-1">
+                    Username
+                  </label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. alextan"
+                      value={loginUsername}
+                      onChange={(e) => setLoginUsername(e.target.value)}
+                      className="pl-9 pr-4 w-full bg-slate-50 border border-slate-200 text-xs p-3 rounded-xl focus:outline-hidden focus:ring-1 focus:ring-blue-500 text-slate-800"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-500 mb-1">
+                    Password
+                  </label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
+                    <input
+                      type="password"
+                      required
+                      placeholder="••••••••"
+                      value={loginPassword}
+                      onChange={(e) => setLoginPassword(e.target.value)}
+                      className="pl-9 pr-4 w-full bg-slate-50 border border-slate-200 text-xs p-3 rounded-xl focus:outline-hidden focus:ring-1 focus:ring-blue-500 text-slate-800"
+                    />
+                  </div>
+                </div>
+
                 <button
-                  type="button"
-                  id="cancel-register-btn"
-                  onClick={() => setIsRegistering(false)}
-                  className="text-xs text-slate-400 hover:text-slate-600 cursor-pointer"
+                  type="submit"
+                  className="w-full mt-2 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-md cursor-pointer transition-all uppercase tracking-wider"
                 >
-                  Cancel
+                  Sign In
                 </button>
-              </div>
-
-              {errorMsg && (
-                <div className="p-3 bg-rose-50 text-rose-600 rounded-lg text-xs font-semibold">
-                  ⚠️ {errorMsg}
+                
+                {/* Visual Hint for demo validation */}
+                <div className="pt-2 text-center">
+                  <span className="text-[10px] text-slate-400">
+                    💡 Existing users username: <strong className="text-slate-500">alextan</strong>, <strong className="text-slate-500">jordan</strong>, <strong className="text-slate-500">taylor</strong> (Password is <span className="font-mono">password</span>)
+                  </span>
                 </div>
-              )}
+              </form>
+            )}
 
-              {/* Form entries */}
-              <div className="space-y-4">
-                {/* Step 1: Personal Details */}
-                <div className="space-y-3">
-                  <h4 className="text-[10px] font-bold text-blue-600 uppercase tracking-widest bg-blue-50 py-1 px-2.5 rounded self-start inline-block">
-                    1. Account Profile
-                  </h4>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-500 mb-1">
-                      Roommate Name <span className="text-rose-500">*</span>
-                    </label>
-                    <div className="relative">
-                      <Smile className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
-                      <input
-                        type="text"
-                        className="pl-9 w-full bg-slate-50 border border-slate-200 text-slate-800 text-sm p-2.5 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:bg-white"
-                        placeholder="e.g. Samuel Jackson"
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                      />
-                    </div>
+            {/* BLOCK B: REGISTRATION FLOW */}
+            {activeTab === 'register' && (
+              <form onSubmit={handleRegisterSubmit} className="space-y-4 animate-fade-in duration-200">
+                {errorMsg && (
+                  <div className="p-3 bg-rose-50 border border-rose-150 text-rose-600 rounded-xl text-xs font-semibold">
+                    ⚠️ {errorMsg}
                   </div>
+                )}
 
-                  <div>
-                    <label className="block text-xs font-medium text-slate-500 mb-1">
-                      Email Address <span className="text-rose-500">*</span>
-                    </label>
-                    <div className="relative">
-                      <Mail className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
-                      <input
-                        type="email"
-                        className="pl-9 w-full bg-slate-50 border border-slate-200 text-slate-800 text-sm p-2.5 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:bg-white"
-                        placeholder="e.g. sam@splitmate.com"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Persona Color Avatar choosing */}
-                  <div>
-                    <label className="block text-xs font-medium text-slate-500 mb-1.5">
-                      Avatar Visual Color Profile
-                    </label>
-                    <div className="flex gap-2 flex-wrap">
-                      {AVATAR_COLORS.map((color) => (
-                        <button
-                          key={color}
-                          type="button"
-                          onClick={() => setChosenColor(color)}
-                          className={`w-8 h-8 rounded-full ${color} cursor-pointer border-2 transition-all ${
-                            color === chosenColor 
-                              ? 'ring-2 ring-blue-500 scale-110 border-white' 
-                              : 'border-transparent opacity-70 hover:opacity-100'
-                          }`}
-                        />
-                      ))}
-                    </div>
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-500 mb-1">
+                    Display Name <span className="text-rose-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <Smile className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+                    <input
+                      type="text"
+                      required
+                      className="pl-9 w-full bg-slate-50/50 border border-slate-200 text-slate-850 text-xs p-2.5 rounded-xl focus:outline-hidden focus:ring-1 focus:ring-blue-500 focus:bg-white"
+                      placeholder="e.g. Samuel Jackson"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                    />
                   </div>
                 </div>
 
-                {/* Step 2: Banking Coordinates */}
-                <div className="space-y-3 pt-2 border-t border-slate-100">
-                  <h4 className="text-[10px] font-bold text-amber-600 uppercase tracking-widest bg-amber-50 py-1 px-2.5 rounded self-start inline-block">
-                    2. Payout Bank Details
-                  </h4>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="block text-xs font-medium text-slate-500 mb-1">
-                        Bank Coordinator
-                      </label>
-                      <select
-                        value={bankName}
-                        onChange={(e) => setBankName(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-xs p-2.5 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-500 mb-1">
+                    Username <span className="text-rose-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+                    <input
+                      type="text"
+                      required
+                      className="pl-9 w-full bg-slate-50/50 border border-slate-200 text-slate-850 text-xs p-2.5 rounded-xl focus:outline-hidden focus:ring-1 focus:ring-blue-500 focus:bg-white lowercase"
+                      placeholder="e.g. samuel"
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-500 mb-1">
+                    Password <span className="text-rose-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+                    <input
+                      type="password"
+                      required
+                      className="pl-9 w-full bg-slate-50/50 border border-slate-200 text-slate-850 text-xs p-2.5 rounded-xl focus:outline-hidden focus:ring-1 focus:ring-blue-500 focus:bg-white"
+                      placeholder="••••••••"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                {/* Color Avatar Accent selecting */}
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-500 mb-1.5">
+                    Visual Accent Color
+                  </label>
+                  <div className="flex gap-2 flex-wrap">
+                    {AVATAR_COLORS.map((color) => (
+                      <button
+                        key={color}
+                        type="button"
+                        onClick={() => setChosenColor(color)}
+                        className={`w-7 h-7 rounded-sm ${color} cursor-pointer transition-all flex items-center justify-center text-white text-[10px] ${
+                          color === chosenColor 
+                            ? 'ring-2 ring-blue-600 scale-110 shadow-md' 
+                            : 'opacity-70 hover:opacity-100'
+                        }`}
                       >
-                        <option value="Maybank">Maybank</option>
-                        <option value="CIMB Bank">CIMB Bank</option>
-                        <option value="Public Bank">Public Bank</option>
-                        <option value="Touch n Go eWallet">Touch n Go eWallet</option>
-                        <option value="Standard Chartered">Standard Chartered</option>
-                        <option value="HSBC Bank">HSBC Bank</option>
-                        <option value="Other Bank">Other Coordinator</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-slate-500 mb-1">
-                        AccountNumber <span className="text-rose-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="e.g. 1140-1234-56"
-                        className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-xs p-2.5 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500"
-                        value={bankAccount}
-                        onChange={(e) => setBankAccount(e.target.value)}
-                      />
-                    </div>
+                        {color === chosenColor && <Check className="w-3.5 h-3.5" />}
+                      </button>
+                    ))}
                   </div>
                 </div>
 
-                {/* Step 3: Household Choice */}
-                <div className="space-y-3 pt-2 border-t border-slate-100">
-                  <h4 className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest bg-emerald-50 py-1 px-2.5 rounded self-start inline-block">
-                    3. Household Assignment
-                  </h4>
-                  
-                  {/* Join vs Create switcher tabs */}
-                  <div className="grid grid-cols-2 gap-1 bg-slate-100 p-1 rounded-lg">
-                    <button
-                      type="button"
-                      onClick={() => setGroupChoice('join')}
-                      className={`text-xs py-1.5 rounded-md font-semibold transition-all cursor-pointer ${
-                        groupChoice === 'join' 
-                          ? 'bg-white shadow-xs text-blue-600' 
-                          : 'text-slate-500 hover:text-slate-850'
-                      }`}
-                    >
-                      Join Existing
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setGroupChoice('create')}
-                      className={`text-xs py-1.5 rounded-md font-semibold transition-all cursor-pointer ${
-                        groupChoice === 'create' 
-                          ? 'bg-white shadow-xs text-blue-600' 
-                          : 'text-slate-500 hover:text-slate-850'
-                      }`}
-                    >
-                      Create Unique
-                    </button>
-                  </div>
+                {/* Sign up & redirect */}
+                <button
+                  type="submit"
+                  id="submit-register-btn"
+                  className="w-full mt-4 flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs tracking-wider p-3 rounded-2xl shadow-md cursor-pointer transition-all uppercase"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  Sign Up & Register
+                </button>
+              </form>
+            )}
 
-                  {groupChoice === 'join' ? (
-                    <div>
-                      <label className="block text-xs font-medium text-slate-500 mb-1">
-                        Available Suite / House to join
-                      </label>
-                      <select
-                        value={existingId}
-                        onChange={(e) => setExistingId(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-xs p-2.5 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 cursor-pointer"
-                      >
-                        {groups.map((g) => (
-                          <option key={g.id} value={g.id}>
-                            🏡 {g.name} ({g.houseNo})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  ) : (
-                    <div className="space-y-2 border border-blue-100 bg-blue-50/20 p-3 rounded-lg">
-                      <div>
-                        <label className="block text-[11px] font-medium text-slate-600 mb-1">
-                          Household Name
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="e.g. Garden Heights Penthouse"
-                          className="w-full bg-white border border-slate-200 text-slate-850 text-xs p-2 rounded focus:outline-hidden focus:ring-1 focus:ring-blue-500"
-                          value={newGroupName}
-                          onChange={(e) => setNewGroupName(e.target.value)}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-medium text-slate-600 mb-1">
-                          Unit / House No
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="e.g. Block C-18-09"
-                          className="w-full bg-white border border-slate-200 text-slate-850 text-xs p-2 rounded focus:outline-hidden focus:ring-1 focus:ring-blue-500"
-                          value={newHouseNo}
-                          onChange={(e) => setNewHouseNo(e.target.value)}
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
+          </div>
 
-              <button
-                type="submit"
-                id="submit-register-btn"
-                className="w-full mt-4 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs p-3 rounded-xl shadow-md cursor-pointer transition-all hover:shadow-lg hover:shadow-blue-200"
-              >
-                <Sparkles className="w-4 h-4 mr-1.5" />
-                Complete Registration & Sign-In
-              </button>
-            </form>
-          )}
         </div>
+
       </div>
     </div>
   );

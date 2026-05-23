@@ -28,7 +28,12 @@ export default function App() {
   // Master lists and active selectors
   const [roommates, setRoommates] = useState<Roommate[]>(() => {
     const saved = localStorage.getItem('splitmate_roommates');
-    return saved ? JSON.parse(saved) : INITIAL_ROOMMATES;
+    const parsed: Roommate[] = saved ? JSON.parse(saved) : INITIAL_ROOMMATES;
+    return parsed.map((r) => ({
+      ...r,
+      username: r.username || (r.name || 'user').toLowerCase().replace(/[^a-z0-9]/g, '') || `user-${r.id}`,
+      password: r.password || 'password'
+    }));
   });
 
   const [groups, setGroups] = useState<Group[]>(() => {
@@ -105,7 +110,34 @@ export default function App() {
 
   // Find active data records based on states
   const currentRoommate = roommates.find((r) => r.id === currentRoommateId) || null;
-  const activeGroup = groups.find((g) => g.id === activeGroupId) || groups[0];
+  const activeGroup = currentRoommateId 
+    ? (groups.find((g) => g.id === activeGroupId && g.roommateIds.includes(currentRoommateId)) || 
+       groups.find((g) => g.roommateIds.includes(currentRoommateId)) || 
+       undefined)
+    : (groups.find((g) => g.id === activeGroupId) || groups[0]);
+
+  const isMemberOfActiveGroup = currentRoommateId && activeGroup ? activeGroup.roommateIds.includes(currentRoommateId) : false;
+
+  // Compute filtered items for this group to avoid cross-group leaks or preloaded money for new suites!
+  const activeGroupMembers = isMemberOfActiveGroup 
+    ? roommates.filter((r) => activeGroup.roommateIds.includes(r.id))
+    : (currentRoommate ? [currentRoommate] : []);
+
+  const activeGroupExpenses = isMemberOfActiveGroup 
+    ? expenses.filter(
+        (exp) =>
+          activeGroup.roommateIds.includes(exp.paidById) &&
+          exp.splitWithIds.some((id) => activeGroup.roommateIds.includes(id))
+      )
+    : [];
+
+  const activeGroupPayments = isMemberOfActiveGroup 
+    ? payments.filter(
+        (pay) =>
+          activeGroup.roommateIds.includes(pay.fromId) &&
+          activeGroup.roommateIds.includes(pay.toId)
+      )
+    : [];
 
   // Route back to sign-in page if no active user profiles
   useEffect(() => {
@@ -128,10 +160,10 @@ export default function App() {
   };
 
   // Update a roommate's custom bank coordinates
-  const handleUpdateBankProfile = (id: string, bankName: string, bankAccount: string) => {
+  const handleUpdateBankProfile = (id: string, bankName: string, bankAccount: string, qrCodeDataUrl?: string) => {
     setRoommates((prev) =>
       prev.map((r) =>
-        r.id === id ? { ...r, bankName, bankAccount } : r
+        r.id === id ? { ...r, bankName, bankAccount, qrCodeDataUrl: qrCodeDataUrl ?? r.qrCodeDataUrl } : r
       )
     );
   };
@@ -155,14 +187,34 @@ export default function App() {
     setReminders((prev) => prev.filter((r) => r.id !== remId));
   };
 
+  // Invite URL link deep-linking parser
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const codeParam = params.get('group') || params.get('code');
+    if (codeParam) {
+      const matched = groups.find(
+        (g) => g.joinCode.toUpperCase() === codeParam.trim().toUpperCase() || g.id === codeParam
+      );
+      if (matched) {
+        setActiveGroupId(matched.id);
+        // If not logged in, remain in login page to join this group
+      }
+    }
+  }, [groups]);
+
   // Group modifiers
   const handleCreateGroup = (name: string, type: 'roommates' | 'housemates', houseNo: string) => {
+    const prefix = name.replace(/[^a-zA-Z]/g, '').substring(0, 4).toUpperCase() || 'GRP';
+    const randNum = Math.floor(100 + Math.random() * 900);
+    const joinCode = `${prefix}-${randNum}`;
+
     const newGroup: Group = {
       id: `grp-${Date.now()}`,
       name,
       type,
       houseNo,
-      roommateIds: roommates.map((r) => r.id), // Initialize with everyone so it is fully interactive
+      roommateIds: currentRoommateId ? [currentRoommateId] : [], // Only include the creator initially
+      joinCode,
     };
 
     setGroups((prev) => [...prev, newGroup]);
@@ -173,82 +225,109 @@ export default function App() {
     setActiveGroupId(groupId);
   };
 
-  // Add roommate profile with bank properties & group choice join/creation option
-  const handleRegisterRoommateAndLogin = (
+  // Leave Group
+  const handleLeaveGroup = (groupId: string) => {
+    if (!currentRoommateId) return;
+    setGroups((prev) => {
+      const updated = prev.map((g) =>
+        g.id === groupId
+          ? { ...g, roommateIds: g.roommateIds.filter((id) => id !== currentRoommateId) }
+          : g
+      );
+      return updated;
+    });
+    // Dynamically assign next group
+    const remainingJoined = groups.filter((g) => g.id !== groupId && g.roommateIds.includes(currentRoommateId));
+    if (remainingJoined.length > 0) {
+      setActiveGroupId(remainingJoined[0].id);
+    } else {
+      setActiveGroupId('');
+    }
+  };
+
+  // Delete Group
+  const handleDeleteGroup = (groupId: string) => {
+    setGroups((prev) => prev.filter((g) => g.id !== groupId));
+    // Assign alternative group
+    const remaining = groups.filter((g) => g.id !== groupId);
+    const userGroups = remaining.filter((g) => currentRoommateId && g.roommateIds.includes(currentRoommateId));
+    if (userGroups.length > 0) {
+      setActiveGroupId(userGroups[0].id);
+    } else if (remaining.length > 0) {
+      setActiveGroupId(remaining[0].id);
+    } else {
+      setActiveGroupId('');
+    }
+  };
+
+  // Join group by invite code and notify all other roomies
+  const handleJoinGroup = (joinCode: string): { success: boolean; error?: string; alreadyJoined?: boolean } => {
+    if (!currentRoommateId) return { success: false, error: 'Not logged in' };
+    const codeClean = joinCode.trim().toUpperCase();
+    const targetGroup = groups.find(
+      (g) => g.joinCode.toUpperCase() === codeClean || g.id.toUpperCase() === codeClean
+    );
+
+    if (!targetGroup) {
+      return { success: false, error: 'Suite code lookup failed! Group not found.' };
+    }
+
+    if (targetGroup.roommateIds.includes(currentRoommateId)) {
+      setActiveGroupId(targetGroup.id);
+      return { success: true, alreadyJoined: true }; // already joined
+    }
+
+    // Join the group!
+    setGroups((prev) =>
+      prev.map((g) =>
+        g.id === targetGroup.id
+          ? { ...g, roommateIds: [...g.roommateIds, currentRoommateId] }
+          : g
+      )
+    );
+    setActiveGroupId(targetGroup.id);
+
+    // Notify other roommates in this group that this user has joined!
+    const otherRoommateIds = targetGroup.roommateIds;
+    const joinTime = new Date().toISOString().split('T')[0];
+    const joinerName = roommates.find((r) => r.id === currentRoommateId)?.name || 'New Roommate';
+
+    if (otherRoommateIds.length > 0) {
+      const newReminders: AppReminder[] = otherRoommateIds.map((otherId) => ({
+        id: `rem-join-${Date.now()}-${otherId}`,
+        fromId: currentRoommateId,
+        toId: otherId,
+        amount: 0,
+        date: joinTime,
+        billTitle: `${joinerName} has joined your suite group "${targetGroup.name}"!`,
+        isRead: false,
+      }));
+      setReminders((prev) => [...prev, ...newReminders]);
+    }
+
+    return { success: true };
+  };
+
+  // Register clean profile with username & password
+  const handleRegisterRoommate = (
     name: string,
-    email: string,
-    avatarColor: string,
-    bankName: string,
-    bankAccount: string,
-    groupChoice: 'join' | 'create',
-    existingGroupId?: string,
-    newGroupName?: string,
-    newHouseNo?: string
+    username: string,
+    password: string,
+    avatarColor: string
   ) => {
     const newPersonId = `usr-${Date.now()}`;
     const newPerson: Roommate = {
       id: newPersonId,
       name,
-      email,
-      avatarColor,
-      bankName: bankName || 'Maybank',
-      bankAccount: bankAccount || `1140-${Math.floor(1000 + Math.random() * 9000)}-${Math.floor(1000 + Math.random() * 9000)}`,
-      qrType: (bankName || '').toLowerCase().includes('wallet') ? 'duitnow' : 'bank'
-    };
-
-    setRoommates((prev) => [...prev, newPerson]);
-    
-    if (groupChoice === 'create' && newGroupName && newHouseNo) {
-      const newGroupId = `grp-${Date.now()}`;
-      const newGroup: Group = {
-        id: newGroupId,
-        name: newGroupName,
-        type: 'roommates',
-        houseNo: newHouseNo,
-        roommateIds: [newPersonId]
-      };
-      setGroups((prev) => [...prev, newGroup]);
-      setActiveGroupId(newGroupId);
-    } else {
-      const targetGroup = existingGroupId || activeGroupId;
-      setGroups((prevGroups) =>
-        prevGroups.map((g) =>
-          g.id === targetGroup
-            ? { ...g, roommateIds: [...g.roommateIds, newPersonId] }
-            : g
-        )
-      );
-      if (existingGroupId) {
-        setActiveGroupId(existingGroupId);
-      }
-    }
-
-    // Auto sign in as this person!
-    setCurrentRoommateId(newPersonId);
-    setCurrentPage('dashboard');
-  };
-
-  const handleAddRoommateToActiveGroup = (name: string, email: string, avatarColor: string) => {
-    const newPerson: Roommate = {
-      id: `usr-${Date.now()}`,
-      name,
-      email,
+      username: username.toLowerCase().trim(),
+      password: password || 'password',
       avatarColor,
       bankName: 'Maybank',
-      bankAccount: '1622-0055-' + Math.floor(1000 + Math.random() * 9000),
+      bankAccount: '',
       qrType: 'duitnow'
     };
 
     setRoommates((prev) => [...prev, newPerson]);
-    
-    // Specific injection
-    setGroups((prevGroups) =>
-      prevGroups.map((g) =>
-        g.id === activeGroupId
-          ? { ...g, roommateIds: [...g.roommateIds, newPerson.id] }
-          : g
-      )
-    );
   };
 
   // Expense Modifiers
@@ -299,6 +378,21 @@ export default function App() {
     };
 
     setPayments((prev) => [newPayment, ...prev]);
+
+    // If others paid the owner, notify only the owner of the money
+    if (fromId !== toId) {
+      const payerName = roommates.find((r) => r.id === fromId)?.name || 'A roommate';
+      const newReminder: AppReminder = {
+        id: `rem-pay-${Date.now()}`,
+        fromId,
+        toId,
+        amount,
+        date,
+        billTitle: `${payerName} posted proof of payment: RM ${amount.toFixed(2)} - "${note}"`,
+        isRead: false
+      };
+      setReminders((prev) => [...prev, newReminder]);
+    }
   };
 
   // Quick Settle Action from Settle Dashboard widget
@@ -317,6 +411,21 @@ export default function App() {
     };
 
     setPayments((prev) => [newSettle, ...prev]);
+
+    // Notify the owner of the money
+    if (fromId !== toId) {
+      const payerName = roommates.find((r) => r.id === fromId)?.name || 'A roommate';
+      const newReminder: AppReminder = {
+        id: `rem-pay-${Date.now()}`,
+        fromId,
+        toId,
+        amount,
+        date: today,
+        billTitle: `${payerName} logged a quick settle of RM ${amount.toFixed(2)} to you`,
+        isRead: false
+      };
+      setReminders((prev) => [...prev, newReminder]);
+    }
   };
 
   const handleApprovePayment = (paymentId: string) => {
@@ -359,7 +468,7 @@ export default function App() {
             groups={groups}
             activeGroupId={activeGroupId}
             onSelectUser={handleSelectUser}
-            onAddRoommate={handleRegisterRoommateAndLogin}
+            onAddRoommate={handleRegisterRoommate}
             onSelectGroup={handleSelectGroup}
           />
         )}
@@ -369,23 +478,25 @@ export default function App() {
             currentRoommate={currentRoommate}
             roommates={roommates}
             groups={groups}
-            activeGroupId={activeGroupId}
-            expenses={expenses}
-            payments={payments}
+            activeGroupId={activeGroup.id}
+            expenses={activeGroupExpenses}
+            payments={activeGroupPayments}
             onSelectGroup={handleSelectGroup}
             onCreateGroup={handleCreateGroup}
-            onAddRoommateToActiveGroup={handleAddRoommateToActiveGroup}
+            onJoinGroup={handleJoinGroup}
             onQuickSettle={handleQuickSettleOnDashboard}
             onNavigate={handleNavigate}
             onSendReminder={handleSendReminder}
             onUpdateBankProfile={handleUpdateBankProfile}
+            onLeaveGroup={handleLeaveGroup}
+            onDeleteGroup={handleDeleteGroup}
           />
         )}
 
         {currentPage === 'add-expense' && currentRoommate && (
           <AddExpensePage
             currentRoommate={currentRoommate}
-            roommates={roommates.filter((r) => activeGroup.roommateIds.includes(r.id))}
+            roommates={activeGroupMembers}
             onAddExpense={handleAddExpense}
             onNavigate={handleNavigate}
           />
@@ -393,8 +504,8 @@ export default function App() {
 
         {currentPage === 'expense-summary' && currentRoommate && (
           <ExpenseSummaryPage
-            expenses={expenses}
-            roommates={roommates.filter((r) => activeGroup.roommateIds.includes(r.id))}
+            expenses={activeGroupExpenses}
+            roommates={activeGroupMembers}
             onDeleteExpense={handleDeleteExpense}
             onNavigate={handleNavigate}
           />
@@ -403,9 +514,9 @@ export default function App() {
         {currentPage === 'payment-status' && currentRoommate && (
           <PaymentStatusPage
             currentRoommate={currentRoommate}
-            roommates={roommates.filter((r) => activeGroup.roommateIds.includes(r.id))}
-            expenses={expenses}
-            payments={payments}
+            roommates={activeGroupMembers}
+            expenses={activeGroupExpenses}
+            payments={activeGroupPayments}
             onAddPayment={handleAddPayment}
             onApprovePayment={handleApprovePayment}
             onDeletePayment={handleDeletePayment}

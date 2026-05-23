@@ -7,10 +7,10 @@ import { Roommate, Expense, PaymentActivity, Group } from '../types';
 
 // Let's establish realistic seed data
 export const INITIAL_ROOMMATES: Roommate[] = [
-  { id: '1', name: 'Alex Tan', email: 'alex.tan@splitmate.com', avatarColor: 'bg-emerald-500', bankName: 'Maybank', bankAccount: '1140-1234-5678', qrType: 'duitnow' },
-  { id: '2', name: 'Jordan Myers', email: 'jordan@splitmate.com', avatarColor: 'bg-blue-500', bankName: 'CIMB Bank', bankAccount: '8005-9988-7711', qrType: 'bank' },
-  { id: '3', name: 'Taylor Reid', email: 'taylor@splitmate.com', avatarColor: 'bg-amber-500', bankName: 'Touch n Go eWallet', bankAccount: '012-345-6789', qrType: 'duitnow' },
-  { id: '4', name: 'Morgan Lee', email: 'morgan@splitmate.com', avatarColor: 'bg-violet-500', bankName: 'Public Bank', bankAccount: '3199-5566-2244', qrType: 'other' },
+  { id: '1', name: 'Alex Tan', username: 'alextan', password: 'password', avatarColor: 'bg-emerald-500', bankName: 'Maybank', bankAccount: '1140-1234-5678', qrType: 'duitnow' },
+  { id: '2', name: 'Jordan Myers', username: 'jordan', password: 'password', avatarColor: 'bg-blue-500', bankName: 'CIMB Bank', bankAccount: '8005-9988-7711', qrType: 'bank' },
+  { id: '3', name: 'Taylor Reid', username: 'taylor', password: 'password', avatarColor: 'bg-amber-500', bankName: 'Touch n Go eWallet', bankAccount: '012-345-6789', qrType: 'duitnow' },
+  { id: '4', name: 'Morgan Lee', username: 'morgan', password: 'password', avatarColor: 'bg-violet-500', bankName: 'Public Bank', bankAccount: '3199-5566-2244', qrType: 'other' },
 ];
 
 export const INITIAL_GROUPS: Group[] = [
@@ -20,6 +20,7 @@ export const INITIAL_GROUPS: Group[] = [
     type: 'roommates',
     houseNo: 'Block B-12-05',
     roommateIds: ['1', '2', '3', '4'],
+    joinCode: 'COSY-101',
   }
 ];
 
