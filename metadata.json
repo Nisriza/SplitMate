@@ -1,0 +1,6 @@
+{
+  "name": "SplitMate",
+  "description": "A modern, shared expense and bill-splitting companion for roommates and housemates to track payments fairly.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
