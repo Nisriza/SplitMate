@@ -264,12 +264,12 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
             </div>
             
             {joinError && (
-              <div className="p-3 bg-red-950 text-red-150 border-2 border-red-500 rounded-xl text-xs font-bold font-mono mt-3 animate-fade-in text-white">
+              <div className="p-3 bg-red-950 text-red-100 border-2 border-red-500 rounded-xl text-xs font-bold font-mono mt-3 animate-fade-in text-white">
                 ⚠️ {joinError}
               </div>
             )}
             {joinSuccess && (
-              <div className="p-3 bg-emerald-950 text-emerald-150 border-2 border-emerald-500 rounded-xl text-xs font-bold font-mono mt-3 animate-fade-in text-white">
+              <div className="p-3 bg-emerald-950 text-emerald-100 border-2 border-emerald-500 rounded-xl text-xs font-bold font-mono mt-3 animate-fade-in text-white">
                 ✅ Successfully joined suite group! The ledger has synced instantly.
               </div>
             )}

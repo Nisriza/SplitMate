@@ -32,6 +32,7 @@ interface PaymentStatusPageProps {
   onAddPayment: (fromId: string, toId: string, amount: number, date: string, note: string, status: 'pending' | 'completed') => void;
   onApprovePayment: (paymentId: string) => void;
   onDeletePayment: (paymentId: string) => void;
+  onUpdatePayment: (updated: PaymentActivity) => void;
 }
 
 export const PaymentStatusPage: React.FC<PaymentStatusPageProps> = ({
@@ -42,6 +43,7 @@ export const PaymentStatusPage: React.FC<PaymentStatusPageProps> = ({
   onAddPayment,
   onApprovePayment,
   onDeletePayment,
+  onUpdatePayment,
 }) => {
   // Navigation sidebar tab: manual transfer form vs smart AI OCR PDF receipt scanner
   const [activeTab, setActiveTab] = useState<'manual' | 'ocr'>('ocr');
@@ -53,6 +55,20 @@ export const PaymentStatusPage: React.FC<PaymentStatusPageProps> = ({
   const [dateStr, setDateStr] = useState(new Date().toISOString().split('T')[0]);
   const [note, setNote] = useState('');
   const [immediateComplete, setImmediateComplete] = useState<boolean>(true); // default true for immediate balance settlement
+
+  // Edit/Modify Payment details state
+  const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null);
+  const [editFromId, setEditFromId] = useState('');
+  const [editToId, setEditToId] = useState('');
+  const [editAmountStr, setEditAmountStr] = useState('');
+  const [editDateStr, setEditDateStr] = useState('');
+  const [editNoteStr, setEditNoteStr] = useState('');
+  const [editStatus, setEditStatus] = useState<'pending' | 'completed'>('completed');
+  const [editError, setEditError] = useState('');
+
+  // Inline confirmations states to bypass standard iFrame alerts blocking
+  const [deletingPaymentId, setDeletingPaymentId] = useState<string | null>(null);
+  const [approvingPaymentId, setApprovingPaymentId] = useState<string | null>(null);
 
   const [formError, setFormError] = useState('');
   const [showForm, setShowForm] = useState(false);
@@ -127,6 +143,45 @@ export const PaymentStatusPage: React.FC<PaymentStatusPageProps> = ({
     
     // Switch to active view
     setOcrCompletedSuccessMsg('Successfully logged your physical roommate payment!');
+    setTimeout(() => setOcrCompletedSuccessMsg(''), 5000);
+  };
+
+  const handleEditPaymentSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setEditError('');
+
+    if (!editingPaymentId) return;
+
+    const amt = parseFloat(editAmountStr) || 0;
+    if (amt <= 0) {
+      setEditError('Please input a positive numeric transfer amount');
+      return;
+    }
+    if (!editToId) {
+      setEditError('Please select a recipient roommate');
+      return;
+    }
+    if (editFromId === editToId) {
+      setEditError('Payer and recipient profile cannot be the same');
+      return;
+    }
+
+    const currentPaymentObject = payments.find(p => p.id === editingPaymentId);
+    if (!currentPaymentObject) return;
+
+    const updatedPayment: PaymentActivity = {
+      ...currentPaymentObject,
+      fromId: editFromId,
+      toId: editToId,
+      amount: amt,
+      date: editDateStr,
+      note: editNoteStr.trim() || 'Settle joint balance split',
+      status: editStatus,
+    };
+
+    onUpdatePayment(updatedPayment);
+    setEditingPaymentId(null);
+    setOcrCompletedSuccessMsg('Successfully updated and saved the payment details!');
     setTimeout(() => setOcrCompletedSuccessMsg(''), 5000);
   };
 
@@ -677,47 +732,250 @@ export const PaymentStatusPage: React.FC<PaymentStatusPageProps> = ({
                             </span>
                           </div>
 
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex flex-wrap items-center justify-end gap-1.5">
                             <button
                               type="button"
                               onClick={() => {
                                 setActiveReceiptPaymentId(activeReceiptPaymentId === payment.id ? null : payment.id);
+                                setEditingPaymentId(null);
                               }}
-                              className="px-2 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-md text-[10px] font-bold cursor-pointer transition-all flex items-center gap-1"
+                              className={`px-2 py-1.5 rounded-md text-[10px] font-bold cursor-pointer transition-all flex items-center gap-1 ${
+                                activeReceiptPaymentId === payment.id
+                                  ? 'bg-blue-600 text-white'
+                                  : 'bg-blue-50 hover:bg-blue-100 text-blue-600'
+                              }`}
                               title="Inspect receipt documents"
                             >
                               Proof 📄
                             </button>
-                            
-                            {isPending && isIncomingToMe && (
-                              <button
-                                id={`approve-payment-${payment.id}`}
-                                onClick={() => {
-                                  if(confirm(`Confirm receipt of RM ${payment.amount.toFixed(2)} from ${fromUser.name}?`)) {
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingPaymentId(editingPaymentId === payment.id ? null : payment.id);
+                                setActiveReceiptPaymentId(null);
+                                // Prepopulate edit states:
+                                setEditFromId(payment.fromId);
+                                setEditToId(payment.toId);
+                                setEditAmountStr(String(payment.amount));
+                                setEditDateStr(payment.date);
+                                setEditNoteStr(payment.note);
+                                setEditStatus(payment.status);
+                                setEditError('');
+                              }}
+                              className={`px-2 py-1.5 rounded-md text-[10px] font-bold cursor-pointer transition-all flex items-center gap-1 ${
+                                editingPaymentId === payment.id
+                                  ? 'bg-slate-700 text-white'
+                                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                              }`}
+                              title="Modify active payment record"
+                            >
+                              Edit ✏️
+                            </button>
+
+                            {/* Custom confirmation to prevent Sandboxed iFrame confirm blocking */}
+                            {approvingPaymentId === payment.id ? (
+                              <div className="flex items-center gap-1 bg-emerald-50 p-1 rounded-md border border-emerald-200 animate-fade-in">
+                                <span className="text-[9px] font-bold text-emerald-800">Confirm?</span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
                                     onApprovePayment(payment.id);
-                                  }
-                                }}
-                                className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold tracking-wider text-[9px] rounded-md uppercase cursor-pointer transition-colors"
-                                title="Approve and update balance pool"
+                                    setApprovingPaymentId(null);
+                                    setOcrCompletedSuccessMsg(`🎉 Successfully approved RM ${payment.amount.toFixed(2)} transfer! Pool updated.`);
+                                    setTimeout(() => setOcrCompletedSuccessMsg(''), 5000);
+                                  }}
+                                  className="px-1.5 py-0.5 bg-emerald-600 text-white font-bold text-[8px] rounded cursor-pointer"
+                                >
+                                  Yes
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setApprovingPaymentId(null)}
+                                  className="px-1.5 py-0.5 bg-slate-200 text-slate-700 font-bold text-[8px] rounded cursor-pointer"
+                                >
+                                  No
+                                </button>
+                              </div>
+                            ) : (
+                              isPending && isIncomingToMe && (
+                                <button
+                                  id={`approve-payment-${payment.id}`}
+                                  onClick={() => setApprovingPaymentId(payment.id)}
+                                  className="px-2 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold tracking-wider text-[9px] rounded-md uppercase cursor-pointer transition-colors"
+                                  title="Approve and update balance pool"
+                                >
+                                  Approve Receipt
+                                </button>
+                              )
+                            )}
+
+                            {deletingPaymentId === payment.id ? (
+                              <div className="flex items-center gap-1 bg-rose-50 p-1 rounded-md border border-rose-200 animate-fade-in">
+                                <span className="text-[9px] font-bold text-rose-800">Delete?</span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    onDeletePayment(payment.id);
+                                    setDeletingPaymentId(null);
+                                  }}
+                                  className="px-1.5 py-0.5 bg-rose-600 text-white font-bold text-[8px] rounded cursor-pointer"
+                                >
+                                  Del
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setDeletingPaymentId(null)}
+                                  className="px-1.5 py-0.5 bg-slate-200 text-slate-700 font-bold text-[8px] rounded cursor-pointer"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                id={`delete-payment-${payment.id}`}
+                                onClick={() => setDeletingPaymentId(payment.id)}
+                                className="px-2 py-1 bg-slate-50 hover:bg-rose-50 text-slate-400 hover:text-rose-600 border border-slate-200/60 rounded-md transition-colors text-xs font-semibold cursor-pointer"
+                                title="Remove ledger payment activity log"
                               >
-                                Approve Receipt
+                                delete
                               </button>
                             )}
-                            <button
-                              id={`delete-payment-${payment.id}`}
-                              onClick={() => {
-                                if(confirm('Are you sure you want to delete this transfer activity?')) {
-                                  onDeletePayment(payment.id);
-                                }
-                              }}
-                              className="px-2 py-1 bg-slate-100 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded transition-colors text-xs font-semibold cursor-pointer"
-                              title="Remove log entry"
-                            >
-                              delete
-                            </button>
                           </div>
                         </div>
                       </div>
+
+                      {/* Expanding transaction edit form panel */}
+                      {editingPaymentId === payment.id && (
+                        <form onSubmit={handleEditPaymentSubmit} className="mt-2 text-left animate-slide-up bg-slate-50 border border-slate-200/80 rounded-xl p-4 space-y-3.5">
+                          <div className="flex justify-between items-center pb-2 border-b border-slate-200/50">
+                            <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider flex items-center gap-1">
+                              ⚙️ Modify Settlement Form details
+                            </span>
+                            <span className="text-[10px] text-slate-450 font-mono">ID: {String(payment.id || '').toUpperCase()}</span>
+                          </div>
+
+                          {editError && (
+                            <div className="p-2 bg-rose-50 border border-rose-100 text-rose-600 text-[11px] rounded font-semibold">
+                              ⚠️ {editError}
+                            </div>
+                          )}
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {/* Sender */}
+                            <div>
+                              <label className="block text-[9px] uppercase font-bold text-slate-400 mb-1">Sender (Payer)</label>
+                              <select
+                                value={editFromId}
+                                onChange={(e) => setEditFromId(e.target.value)}
+                                className="w-full bg-white border border-slate-200 text-xs p-1.5 rounded-lg text-slate-800 focus:ring-1 focus:ring-blue-500"
+                              >
+                                {roommates.map(r => (
+                                  <option key={r.id} value={r.id}>{r.name}</option>
+                                ))}
+                              </select>
+                            </div>
+
+                            {/* Recipient */}
+                            <div>
+                              <label className="block text-[9px] uppercase font-bold text-slate-400 mb-1">Recipient</label>
+                              <select
+                                value={editToId}
+                                onChange={(e) => setEditToId(e.target.value)}
+                                className="w-full bg-white border border-slate-200 text-xs p-1.5 rounded-lg text-slate-800 focus:ring-1 focus:ring-blue-500"
+                              >
+                                {roommates.map(r => (
+                                  <option key={r.id} value={r.id}>{r.name}</option>
+                                ))}
+                              </select>
+                            </div>
+
+                            {/* Amount */}
+                            <div>
+                              <label className="block text-[9px] uppercase font-bold text-slate-400 mb-1">Amount (RM)</label>
+                              <input
+                                type="number"
+                                step="0.01"
+                                required
+                                value={editAmountStr}
+                                onChange={(e) => setEditAmountStr(e.target.value)}
+                                className="w-full bg-white border border-slate-200 text-slate-800 text-xs p-1.5 rounded-lg font-mono focus:ring-1 focus:ring-blue-500"
+                              />
+                            </div>
+
+                            {/* Date */}
+                            <div>
+                              <label className="block text-[9px] uppercase font-bold text-slate-400 mb-1">Transfer Date</label>
+                              <input
+                                type="date"
+                                required
+                                value={editDateStr}
+                                onChange={(e) => setEditDateStr(e.target.value)}
+                                className="w-full bg-white border border-slate-200 text-slate-800 text-xs p-1.5 rounded-lg focus:ring-1 focus:ring-blue-500"
+                              />
+                            </div>
+                          </div>
+
+                          {/* Note */}
+                          <div>
+                            <label className="block text-[9px] uppercase font-bold text-slate-400 mb-1">Receipt Note / Proof Name</label>
+                            <input
+                              type="text"
+                              required
+                              value={editNoteStr}
+                              onChange={(e) => setEditNoteStr(e.target.value)}
+                              className="w-full bg-white border border-slate-200 text-slate-800 text-xs p-1.5 rounded-lg focus:ring-1 focus:ring-blue-500"
+                            />
+                          </div>
+
+                          {/* Status */}
+                          <div className="flex items-center justify-between pt-2 border-t border-slate-200/50">
+                            <div className="flex items-center gap-2">
+                              <span className="text-[9px] uppercase font-bold text-slate-400">Clearance Link status</span>
+                              <div className="flex bg-slate-200 p-0.5 rounded-md gap-0.5">
+                                <button
+                                  type="button"
+                                  onClick={() => setEditStatus('completed')}
+                                  className={`text-[8px] uppercase tracking-wide px-2 py-0.5 font-bold rounded-md transition-colors ${
+                                    editStatus === 'completed'
+                                      ? 'bg-white text-emerald-800 shadow-xs'
+                                      : 'text-slate-500'
+                                  }`}
+                                >
+                                  Settled
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setEditStatus('pending')}
+                                  className={`text-[8px] uppercase tracking-wide px-2 py-0.5 font-bold rounded-md transition-colors ${
+                                    editStatus === 'pending'
+                                      ? 'bg-white text-amber-800 shadow-xs'
+                                      : 'text-slate-500'
+                                  }`}
+                                >
+                                  Pending
+                                </button>
+                              </div>
+                            </div>
+
+                            <div className="flex gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => setEditingPaymentId(null)}
+                                className="px-2.5 py-1 bg-slate-200 hover:bg-slate-300 rounded font-bold text-[10px] text-slate-700 cursor-pointer"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                type="submit"
+                                className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 rounded font-bold text-[10px] text-white cursor-pointer"
+                              >
+                                Save Changes
+                              </button>
+                            </div>
+                          </div>
+                        </form>
+                      )}
 
                       {/* Expanding transaction proof block */}
                       {activeReceiptPaymentId === payment.id && (
@@ -726,7 +984,7 @@ export const PaymentStatusPage: React.FC<PaymentStatusPageProps> = ({
                             <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wider flex items-center gap-1">
                               🏦 Fund Transfer Verification Slip
                             </span>
-                            <span className="text-[10px] text-slate-450 font-mono">ID: TXN-{payment.id.toUpperCase()}</span>
+                            <span className="text-[10px] text-slate-450 font-mono">ID: TXN-{String(payment.id || '').toUpperCase()}</span>
                           </div>
 
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs font-mono">
@@ -747,11 +1005,14 @@ export const PaymentStatusPage: React.FC<PaymentStatusPageProps> = ({
                           <div className="flex items-center justify-between text-[11px] bg-blue-50/50 border border-blue-100 p-2.5 rounded-lg">
                             <div className="flex items-center space-x-2">
                               <span>📄</span>
-                              <span className="font-mono text-slate-600 font-semibold truncate max-w-[200px] sm:max-w-md">SplitMate_Receipt_slip_{payment.id.substring(4, 9)}.pdf</span>
+                              <span className="font-mono text-slate-600 font-semibold truncate max-w-[200px] sm:max-w-md">SplitMate_Receipt_slip_{String(payment.id || '').substring(4, 9)}.pdf</span>
                             </div>
                             <button
                               type="button"
-                              onClick={() => alert(`SplitMate PDF Visualizer: Showing document template.\nPayout RM ${payment.amount.toFixed(2)} from ${fromUser.name} (Source: ${fromUser.bankName}) was successfully transferred on ${payment.date} to ${toUser.name} (${toUser.bankName}).`)}
+                              onClick={() => {
+                                setOcrCompletedSuccessMsg(`📄 Slip Preview: Transfer of RM ${payment.amount.toFixed(2)} from ${fromUser.name} to ${toUser.name} was saved successfully!`);
+                                setTimeout(() => setOcrCompletedSuccessMsg(''), 5000);
+                              }}
                               className="bg-white hover:bg-slate-100 text-blue-600 border border-blue-200 text-[9px] font-bold px-2 py-0.5 rounded cursor-pointer transition-colors"
                             >
                               Download PDF

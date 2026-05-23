@@ -88,6 +88,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({
       const groupOfUser = groups.find(g => g.roommateIds.includes(matchedUser.id));
       if (groupOfUser) {
         onSelectGroup(groupOfUser.id);
+      } else {
+        onSelectGroup('');
       }
       onSelectUser(matchedUser);
     } else {
@@ -264,12 +266,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                   Sign In
                 </button>
                 
-                {/* Visual Hint for demo validation */}
-                <div className="pt-2 text-center">
-                  <span className="text-[10px] text-slate-400">
-                    💡 Existing users username: <strong className="text-slate-500">alextan</strong>, <strong className="text-slate-500">jordan</strong>, <strong className="text-slate-500">taylor</strong> (Password is <span className="font-mono">password</span>)
-                  </span>
-                </div>
+
               </form>
             )}
 

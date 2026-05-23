@@ -192,8 +192,9 @@ export default function App() {
     const params = new URLSearchParams(window.location.search);
     const codeParam = params.get('group') || params.get('code');
     if (codeParam) {
+      const codeCleanParam = codeParam.trim().toUpperCase();
       const matched = groups.find(
-        (g) => g.joinCode.toUpperCase() === codeParam.trim().toUpperCase() || g.id === codeParam
+        (g) => (g.joinCode || '').toUpperCase() === codeCleanParam || (g.id || '').toUpperCase() === codeCleanParam
       );
       if (matched) {
         setActiveGroupId(matched.id);
@@ -263,9 +264,9 @@ export default function App() {
   // Join group by invite code and notify all other roomies
   const handleJoinGroup = (joinCode: string): { success: boolean; error?: string; alreadyJoined?: boolean } => {
     if (!currentRoommateId) return { success: false, error: 'Not logged in' };
-    const codeClean = joinCode.trim().toUpperCase();
+    const codeClean = (joinCode || '').trim().toUpperCase();
     const targetGroup = groups.find(
-      (g) => g.joinCode.toUpperCase() === codeClean || g.id.toUpperCase() === codeClean
+      (g) => (g.joinCode || '').toUpperCase() === codeClean || (g.id || '').toUpperCase() === codeClean
     );
 
     if (!targetGroup) {
@@ -440,6 +441,12 @@ export default function App() {
     setPayments((prev) => prev.filter((p) => p.id !== paymentId));
   };
 
+  const handleUpdatePayment = (updatedPayment: PaymentActivity) => {
+    setPayments((prev) =>
+      prev.map((p) => (p.id === updatedPayment.id ? updatedPayment : p))
+    );
+  };
+
   // Custom Navigation function
   const handleNavigate = (page: 'dashboard' | 'add-expense' | 'expense-summary' | 'payment-status') => {
     setCurrentPage(page);
@@ -478,7 +485,7 @@ export default function App() {
             currentRoommate={currentRoommate}
             roommates={roommates}
             groups={groups}
-            activeGroupId={activeGroup.id}
+            activeGroupId={activeGroup?.id || ''}
             expenses={activeGroupExpenses}
             payments={activeGroupPayments}
             onSelectGroup={handleSelectGroup}
@@ -520,6 +527,7 @@ export default function App() {
             onAddPayment={handleAddPayment}
             onApprovePayment={handleApprovePayment}
             onDeletePayment={handleDeletePayment}
+            onUpdatePayment={handleUpdatePayment}
           />
         )}
       </main>
