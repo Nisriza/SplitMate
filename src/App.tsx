@@ -573,4 +573,3 @@ setPayments((prev) => [newPayment, ...prev]);
 
     </div>
   );
-}
