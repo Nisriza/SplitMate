@@ -228,40 +228,50 @@ export default function App() {
 
   // Leave Group
   const handleLeaveGroup = (groupId: string) => {
-    if (!currentRoommateId) return;
-    setGroups((prev) => {
-      const updated = prev.map((g) =>
-        g.id === groupId
-          ? { ...g, roommateIds: g.roommateIds.filter((id) => id !== currentRoommateId) }
-          : g
-      );
-      // Dynamically assign next group based on freshly computed list
-      const remainingJoined = updated.filter((g) => g.roommateIds.includes(currentRoommateId));
-      if (remainingJoined.length > 0) {
-        setActiveGroupId(remainingJoined[0].id);
-      } else {
-        setActiveGroupId('');
-      }
-      return updated;
-    });
-  };
+  if (!currentRoommateId) return;
+
+  setGroups((prev) => {
+    const updatedGroups = prev.map((g) =>
+      g.id === groupId
+        ? {
+            ...g,
+            roommateIds: g.roommateIds.filter(
+              (id) => id !== currentRoommateId
+            ),
+          }
+        : g
+    );
+
+    const remainingGroups = updatedGroups.filter((g) =>
+      g.roommateIds.includes(currentRoommateId)
+    );
+
+    setActiveGroupId(
+      remainingGroups.length > 0 ? remainingGroups[0].id : ""
+    );
+
+    return updatedGroups;
+  });
+};
 
   // Delete Group
   const handleDeleteGroup = (groupId: string) => {
-    setGroups((prev) => {
-      const remaining = prev.filter((g) => g.id !== groupId);
-      // Assign alternative group
-      const userGroups = remaining.filter((g) => currentRoommateId && g.roommateIds.includes(currentRoommateId));
-      if (userGroups.length > 0) {
-        setActiveGroupId(userGroups[0].id);
-      } else if (remaining.length > 0) {
-        setActiveGroupId(remaining[0].id);
-      } else {
-        setActiveGroupId('');
-      }
-      return remaining;
-    });
-  };
+  setGroups((prev) => {
+    const updatedGroups = prev.filter((g) => g.id !== groupId);
+
+    const remainingGroups = updatedGroups.filter((g) =>
+      currentRoommateId
+        ? g.roommateIds.includes(currentRoommateId)
+        : false
+    );
+
+    setActiveGroupId(
+      remainingGroups.length > 0 ? remainingGroups[0].id : ""
+    );
+
+    return updatedGroups;
+  });
+};
 
   // Join group by invite code and notify all other roomies
   const handleJoinGroup = (joinCode: string): { success: boolean; error?: string; alreadyJoined?: boolean } => {
