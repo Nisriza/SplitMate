@@ -39,7 +39,7 @@ interface DashboardPageProps {
   payments: PaymentActivity[];
   onSelectGroup: (groupId: string) => void;
   onCreateGroup: (name: string, type: 'roommates' | 'housemates', houseNo: string) => void;
-  onJoinGroup: (code: string) => { success: boolean; error?: string };
+  onJoinGroup: (code: string) => Promise<{ success: boolean; error?: string }>;
   onQuickSettle: (fromId: string, toId: string, amount: number) => void;
   onNavigate: (page: 'add-expense' | 'expense-summary' | 'payment-status') => void;
   onSendReminder: (toId: string, amount: number, billTitle?: string) => void;

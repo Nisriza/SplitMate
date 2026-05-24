@@ -202,23 +202,57 @@ export default function App() {
   }, [groups]);
 
   // Group modifiers
-  const handleCreateGroup = (name: string, type: 'roommates' | 'housemates', houseNo: string) => {
-    const prefix = name.replace(/[^a-zA-Z]/g, '').substring(0, 4).toUpperCase() || 'GRP';
-    const randNum = Math.floor(100 + Math.random() * 900);
-    const joinCode = `${prefix}-${randNum}`;
+   const JSONBIN_KEY = '$2a$10$YOUR_API_KEY_HERE'; // ← replace with your key from jsonbin.io
 
-    const newGroup: Group = {
-      id: `grp-${Date.now()}`,
-      name,
-      type,
-      houseNo,
-      roommateIds: currentRoommateId ? [currentRoommateId] : [], // Only include the creator initially
-      joinCode,
-    };
-
-    setGroups((prev) => [...prev, newGroup]);
-    setActiveGroupId(newGroup.id);
+  const pushGroupToCloud = async (group: Group) => {
+    try {
+      await fetch('https://api.jsonbin.io/v3/b', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Master-Key': JSONBIN_KEY,
+          'X-Bin-Name': `splitmate-group-${group.joinCode}`,
+        },
+        body: JSON.stringify(group),
+      });
+    } catch (e) {
+      console.error('Failed to push group to cloud', e);
+    }
   };
+
+  const fetchGroupFromCloud = async (joinCode: string): Promise<Group | null> => {
+    try {
+      const res = await fetch('https://api.jsonbin.io/v3/b/latest', {
+        headers: {
+          'X-Master-Key': JSONBIN_KEY,
+          'X-Bin-Name': `splitmate-group-${joinCode}`,
+        },
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      return data.record as Group;
+    } catch {
+      return null;
+    }
+  };
+  const handleCreateGroup = (name: string, type: 'roommates' | 'housemates', houseNo: string) => {
+  const prefix = name.replace(/[^a-zA-Z]/g, '').substring(0, 4).toUpperCase() || 'GRP';
+  const randNum = Math.floor(100 + Math.random() * 900);
+  const joinCode = `${prefix}-${randNum}`;
+
+  const newGroup: Group = {
+    id: `grp-${Date.now()}`,
+    name,
+    type,
+    houseNo,
+    roommateIds: currentRoommateId ? [currentRoommateId] : [],
+    joinCode,
+  };
+
+  setGroups((prev) => [...prev, newGroup]);
+  setActiveGroupId(newGroup.id);
+  pushGroupToCloud(newGroup); // ← ADD THIS LINE
+};
 
   const handleSelectGroup = (groupId: string) => {
     setActiveGroupId(groupId);
@@ -272,52 +306,65 @@ export default function App() {
 };
 
   // Join group by invite code and notify all other roomies
-  const handleJoinGroup = (joinCode: string): { success: boolean; error?: string; alreadyJoined?: boolean } => {
-    if (!currentRoommateId) return { success: false, error: 'Not logged in' };
-    const codeClean = (joinCode || '').trim().toUpperCase();
-    const targetGroup = groups.find(
-      (g) => (g.joinCode || '').toUpperCase() === codeClean || (g.id || '').toUpperCase() === codeClean
-    );
+  const handleJoinGroup = async (joinCode: string): Promise<{ success: boolean; error?: string; alreadyJoined?: boolean }> => {
+  if (!currentRoommateId) return { success: false, error: 'Not logged in' };
+  const codeClean = (joinCode || '').trim().toUpperCase();
 
-    if (!targetGroup) {
-      return { success: false, error: 'Suite code lookup failed! Group not found.' };
+  // Check local first
+  let targetGroup = groups.find(
+    (g) => (g.joinCode || '').toUpperCase() === codeClean || (g.id || '').toUpperCase() === codeClean
+  );
+
+  // If not found locally, try cloud ← THE KEY FIX
+  if (!targetGroup) {
+    targetGroup = await fetchGroupFromCloud(codeClean) ?? undefined;
+    if (targetGroup) {
+      // Save to local so future lookups work
+      setGroups((prev) => {
+        const exists = prev.find((g) => g.id === targetGroup!.id);
+        return exists ? prev : [...prev, targetGroup!];
+      });
     }
+  }
 
-    if (targetGroup.roommateIds.includes(currentRoommateId)) {
-      setActiveGroupId(targetGroup.id);
-      return { success: true, alreadyJoined: true }; // already joined
-    }
+  if (!targetGroup) {
+    return { success: false, error: 'Suite code lookup failed! Group not found.' };
+  }
 
-    // Join the group!
-    setGroups((prev) =>
-      prev.map((g) =>
-        g.id === targetGroup.id
-          ? { ...g, roommateIds: [...g.roommateIds, currentRoommateId] }
-          : g
-      )
-    );
+  if (targetGroup.roommateIds.includes(currentRoommateId)) {
     setActiveGroupId(targetGroup.id);
+    return { success: true, alreadyJoined: true };
+  }
 
-    // Notify other roommates in this group that this user has joined!
-    const otherRoommateIds = targetGroup.roommateIds;
-    const joinTime = new Date().toISOString().split('T')[0];
-    const joinerName = roommates.find((r) => r.id === currentRoommateId)?.name || 'New Roommate';
+  setGroups((prev) =>
+    prev.map((g) =>
+      g.id === targetGroup!.id
+        ? { ...g, roommateIds: [...g.roommateIds, currentRoommateId] }
+        : g
+    )
+  );
+  setActiveGroupId(targetGroup.id);
 
-    if (otherRoommateIds.length > 0) {
-      const newReminders: AppReminder[] = otherRoommateIds.map((otherId) => ({
-        id: `rem-join-${Date.now()}-${otherId}`,
-        fromId: currentRoommateId,
-        toId: otherId,
-        amount: 0,
-        date: joinTime,
-        billTitle: `${joinerName} has joined your suite group "${targetGroup.name}"!`,
-        isRead: false,
-      }));
-      setReminders((prev) => [...prev, ...newReminders]);
-    }
+  // Notify other roommates
+  const otherRoommateIds = targetGroup.roommateIds;
+  const joinTime = new Date().toISOString().split('T')[0];
+  const joinerName = roommates.find((r) => r.id === currentRoommateId)?.name || 'New Roommate';
 
-    return { success: true };
-  };
+  if (otherRoommateIds.length > 0) {
+    const newReminders: AppReminder[] = otherRoommateIds.map((otherId) => ({
+      id: `rem-join-${Date.now()}-${otherId}`,
+      fromId: currentRoommateId,
+      toId: otherId,
+      amount: 0,
+      date: joinTime,
+      billTitle: `${joinerName} has joined your suite group "${targetGroup.name}"!`,
+      isRead: false,
+    }));
+    setReminders((prev) => [...prev, ...newReminders]);
+  }
+
+  return { success: true };
+};
 
   // Register clean profile with username & password
   const handleRegisterRoommate = (
