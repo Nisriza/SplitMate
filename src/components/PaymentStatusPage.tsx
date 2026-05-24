@@ -289,8 +289,22 @@ export const PaymentStatusPage: React.FC<PaymentStatusPageProps> = ({
     ];
 
     const detectedBank = bankKeywords.find((bank) =>
-      fileNameLower.includes(bank),
-    );
+        fileNameLower.includes(bank)
+      );
+
+      // STRICT FILE VALIDATION
+      const validExtensions = ['pdf', 'png', 'jpg', 'jpeg'];
+
+      const fileExtension = fileNameLower.split('.').pop() || '';
+
+      if (!validExtensions.includes(fileExtension)) {
+        setOcrError(
+          'Invalid file type. Only PDF, PNG, JPG, and JPEG receipts are allowed.'
+        );
+
+        setIsScanning(false);
+        return;
+      }
     let detectedHeader = "";
 
     if (detectedBank) {
@@ -313,10 +327,6 @@ export const PaymentStatusPage: React.FC<PaymentStatusPageProps> = ({
         "trans",
         "ref",
         "reference",
-        "photo",
-        "image",
-        "document",
-        "pdf",
       ];
 
       const matchedGeneral = generalKeywords.find((keyword) =>
@@ -325,7 +335,8 @@ export const PaymentStatusPage: React.FC<PaymentStatusPageProps> = ({
       const matchedRoommate = roommates.find((r) =>
         fileNameLower.includes(r.name.toLowerCase().split(" ")[0]),
       );
-      const hasAccountNumber = fileNameLower.match(/\d{4,}/) !== null;
+      const hasAccountNumber =
+      /\b\d{10,18}\b/.test(fileNameLower);
 
       if (matchedGeneral) {
         detectedHeader = `TRANSACTION ${matchedGeneral.toUpperCase()}`;
