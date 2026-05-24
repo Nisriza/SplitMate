@@ -256,17 +256,25 @@ useEffect(() => {
     (g) => (g.joinCode || '').toUpperCase() === codeClean || (g.id || '').toUpperCase() === codeClean
   );
 
-  // If not found locally, try cloud ← THE KEY FIX
-  if (!targetGroup) {
-    targetGroup = await fetchGroupFromCloud(codeClean) ?? undefined;
-    if (targetGroup) {
-      // Save to local so future lookups work
-      setGroups((prev) => {
-        const exists = prev.find((g) => g.id === targetGroup!.id);
-        return exists ? prev : [...prev, targetGroup!];
-      });
-    }
+ if (!targetGroup) {
+  const { data } = await supabase
+    .from('groups')
+    .select('*')
+    .eq('join_code', codeClean)
+    .single();
+
+  if (data) {
+    targetGroup = {
+      id: data.id, name: data.name, type: data.type,
+      houseNo: data.house_no, roommateIds: data.roommate_ids,
+      joinCode: data.join_code,
+    };
+    setGroups((prev) => {
+      const exists = prev.find((g) => g.id === targetGroup!.id);
+      return exists ? prev : [...prev, targetGroup!];
+    });
   }
+}
 
   if (!targetGroup) {
     return { success: false, error: 'Suite code lookup failed! Group not found.' };
