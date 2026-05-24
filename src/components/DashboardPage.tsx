@@ -157,7 +157,12 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   };
 
   const myGroups = groups.filter((g) => g.roommateIds.includes(currentRoommate.id));
-  const activeGroup = groups.find(g => g.id === activeGroupId && g.roommateIds.includes(currentRoommate.id)) || myGroups[0] || null;
+  const activeGroup =
+  groups.find(
+    (g) =>
+      g.id === activeGroupId &&
+      g.roommateIds.includes(currentRoommate.id)
+  ) || null;
   const isMember = activeGroup ? activeGroup.roommateIds.includes(currentRoommate.id) : false;
 
   // Filter roommates belonging to current group
