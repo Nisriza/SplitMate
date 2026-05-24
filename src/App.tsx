@@ -21,43 +21,41 @@ import {
 export default function App() {
   // Page Location routing
   const [currentPage, setCurrentPage] = useState<AppPage>(() => {
-    const saved = localStorage.getItem('splitmate_current_page');
-    return (saved as AppPage) || 'login';
+    return localStorage.getItem('splitmate_current_page')|| 'login';
   });
 
   // Master lists and active selectors
   const [roommates, setRoommates] = useState<Roommate[]>(() => {
-    const saved = localStorage.getItem('splitmate_roommates');
-    const parsed: Roommate[] = saved ? JSON.parse(saved) : INITIAL_ROOMMATES;
+  const saved = localStorage.getItem('splitmate_roommates');
+  const parsed: Roommate[] = saved ? JSON.parse(saved) : [];
     return parsed.map((r) => ({
       ...r,
       username: r.username || (r.name || 'user').toLowerCase().replace(/[^a-z0-9]/g, '') || `user-${r.id}`,
-      password: r.password || 'password'
+      password: r.password || 'password',
     }));
   });
 
   const [groups, setGroups] = useState<Group[]>(() => {
-    const saved = localStorage.getItem('splitmate_groups');
-    return saved ? JSON.parse(saved) : INITIAL_GROUPS;
+  const savedGroups = localStorage.getItem("splitmate_groups")
+  return savedGroups ? JSON.parse(savedGroups) : [];
   });
 
   const [activeGroupId, setActiveGroupId] = useState<string>(() => {
-    const saved = localStorage.getItem('splitmate_active_group_id');
-    return saved || INITIAL_GROUPS[0].id;
+    return localStorage.getItem('splitmate_active_group_id')|| '';
   });
 
   const [expenses, setExpenses] = useState<Expense[]>(() => {
     const saved = localStorage.getItem('splitmate_expenses');
-    return saved ? JSON.parse(saved) : INITIAL_EXPENSES;
+    return saved ? JSON.parse(saved) : [];
   });
 
   const [payments, setPayments] = useState<PaymentActivity[]>(() => {
     const saved = localStorage.getItem('splitmate_payments');
-    return saved ? JSON.parse(saved) : INITIAL_PAYMENTS;
+    return saved ? JSON.parse(saved) : [];
   });
 
   const [currentRoommateId, setCurrentRoommateId] = useState<string | null>(() => {
-    return localStorage.getItem('splitmate_current_user_id') || null;
+    return localStorage.getItem('splitmate_current_user_id') || '';
   });
 
   // App Reminders state
@@ -328,6 +326,17 @@ export default function App() {
     password: string,
     avatarColor: string
   ) => {
+    // ADD HERE
+  const existingUser = roommates.find(
+    (u) =>
+      u.username.trim().toLowerCase() ===
+      username.trim().toLowerCase()
+  );
+
+  if (existingUser) {
+    alert("Username already exists.");
+    return;
+  }
     const newPersonId = `usr-${Date.now()}`;
     const newPerson: Roommate = {
       id: newPersonId,
@@ -341,6 +350,8 @@ export default function App() {
     };
 
     setRoommates((prev) => [...prev, newPerson]);
+    setCurrentRoommateId(newPersonId);
+    setCurrentPage('dashboard');
   };
 
   // Expense Modifiers

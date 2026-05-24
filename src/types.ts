@@ -7,7 +7,7 @@ export interface Roommate {
   id: string;
   name: string;
   username: string; // Used for login
-  password?: string; // Used for password authentication
+  password: string; // Used for password authentication
   avatarColor: string; // Tailwind color class like 'bg-indigo-500'
   bankName?: string;  // e.g. Maybank, CIMB, Touch n Go eWallet
   bankAccount?: string; // bank or account number
