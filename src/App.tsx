@@ -235,30 +235,32 @@ export default function App() {
           ? { ...g, roommateIds: g.roommateIds.filter((id) => id !== currentRoommateId) }
           : g
       );
+      // Dynamically assign next group based on freshly computed list
+      const remainingJoined = updated.filter((g) => g.roommateIds.includes(currentRoommateId));
+      if (remainingJoined.length > 0) {
+        setActiveGroupId(remainingJoined[0].id);
+      } else {
+        setActiveGroupId('');
+      }
       return updated;
     });
-    // Dynamically assign next group
-    const remainingJoined = groups.filter((g) => g.id !== groupId && g.roommateIds.includes(currentRoommateId));
-    if (remainingJoined.length > 0) {
-      setActiveGroupId(remainingJoined[0].id);
-    } else {
-      setActiveGroupId('');
-    }
   };
 
   // Delete Group
   const handleDeleteGroup = (groupId: string) => {
-    setGroups((prev) => prev.filter((g) => g.id !== groupId));
-    // Assign alternative group
-    const remaining = groups.filter((g) => g.id !== groupId);
-    const userGroups = remaining.filter((g) => currentRoommateId && g.roommateIds.includes(currentRoommateId));
-    if (userGroups.length > 0) {
-      setActiveGroupId(userGroups[0].id);
-    } else if (remaining.length > 0) {
-      setActiveGroupId(remaining[0].id);
-    } else {
-      setActiveGroupId('');
-    }
+    setGroups((prev) => {
+      const remaining = prev.filter((g) => g.id !== groupId);
+      // Assign alternative group
+      const userGroups = remaining.filter((g) => currentRoommateId && g.roommateIds.includes(currentRoommateId));
+      if (userGroups.length > 0) {
+        setActiveGroupId(userGroups[0].id);
+      } else if (remaining.length > 0) {
+        setActiveGroupId(remaining[0].id);
+      } else {
+        setActiveGroupId('');
+      }
+      return remaining;
+    });
   };
 
   // Join group by invite code and notify all other roomies
@@ -364,7 +366,10 @@ export default function App() {
     amount: number,
     date: string,
     note: string,
-    status: 'pending' | 'completed'
+    status: 'pending' | 'completed',
+    isOcr?: boolean,
+    ocrFileName?: string,
+    proofUrl?: string
   ) => {
     const newPayment: PaymentActivity = {
       id: `pay-${Date.now()}`,
@@ -374,8 +379,11 @@ export default function App() {
       date,
       note,
       status,
-      proofType: 'note_statement',
-      proofUrl: 'Verified client-side transfer receipt logged successfully.'
+      proofType: (isOcr || proofUrl) ? 'receipt_slip' : 'note_statement',
+      proofUrl: proofUrl || (isOcr ? 'Smart OCR PDF receipt verified payment' : 'Verified client-side transfer receipt logged successfully.'),
+      isOcr: isOcr || !!proofUrl,
+      ocrFileName,
+      isRejected: false
     };
 
     setPayments((prev) => [newPayment, ...prev]);
@@ -528,6 +536,7 @@ export default function App() {
             onApprovePayment={handleApprovePayment}
             onDeletePayment={handleDeletePayment}
             onUpdatePayment={handleUpdatePayment}
+            onSendReminder={handleSendReminder}
           />
         )}
       </main>

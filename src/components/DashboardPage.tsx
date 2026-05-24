@@ -20,6 +20,7 @@ import {
   TrendingDown,
   UserPlus,
   Bell,
+  BellOff,
   QrCode,
   Link,
   Copy,
@@ -79,9 +80,66 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   const [isEditingBank, setIsEditingBank] = useState(false);
   const [myBankName, setMyBankName] = useState(currentRoommate.bankName || 'Maybank');
   const [myBankAccount, setMyBankAccount] = useState(currentRoommate.bankAccount || '');
+
+  // Simulated Connection State & Group sync messages
+  const [syncState, setSyncState] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
+  const [syncMessage, setSyncMessage] = useState('');
+  const [simulatedOnlineMode, setSimulatedOnlineMode] = useState<boolean>(true);
+
+  // Selected QR details modal
+  const [selectedQRModal, setSelectedQRModal] = useState<{ name: string; url: string; bank: string } | null>(null);
+
+  const handleLeaveGroupWithFeedback = (groupId: string) => {
+    setSyncState('syncing');
+    setSyncMessage('🔌 Connecting to database sync node... Attempting to release suite association...');
+    
+    setTimeout(() => {
+      if (!simulatedOnlineMode) {
+        setSyncState('error');
+        setSyncMessage('❌ CONNECTION REJECTED (ERR_CONNECTION_REFUSED): Failed to connect to server. Check your room router connection or data subscription.');
+        setTimeout(() => {
+          setSyncState('idle');
+          setSyncMessage('');
+        }, 5000);
+      } else {
+        setSyncState('success');
+        setSyncMessage('🚪 SUCCESS: Suite detached and sync complete. Removed the group from your account.');
+        setTimeout(() => {
+          onLeaveGroup?.(groupId);
+          setSyncState('idle');
+          setSyncMessage('');
+        }, 1500);
+      }
+    }, 1200);
+  };
+
+  const handleDeleteGroupWithFeedback = (groupId: string) => {
+    setSyncState('syncing');
+    setSyncMessage('🔌 Sending group dissolution request... Attempting to remove cloud entries...');
+    
+    setTimeout(() => {
+      if (!simulatedOnlineMode) {
+        setSyncState('error');
+        setSyncMessage('❌ GATEWAY TIMEOUT (ERR_CONNECTION_TIMED_OUT): Cloud database connection failed. Your roommate details survived dissolution.');
+        setTimeout(() => {
+          setSyncState('idle');
+          setSyncMessage('');
+        }, 5000);
+      } else {
+        setSyncState('success');
+        setSyncMessage('🗑️ SUCCESS: Suite completely dissolved and removed from your account.');
+        setTimeout(() => {
+          onDeleteGroup?.(groupId);
+          setSyncState('idle');
+          setSyncMessage('');
+        }, 1500);
+      }
+    }, 1200);
+  };
   
   // Local notification confirmation flash message
   const [buzzConfirmedText, setBuzzConfirmedText] = useState<string | null>(null);
+  const [buzzedRoommateIds, setBuzzedRoommateIds] = useState<string[]>([]);
 
   // Invite link/code copy feedback state
   const [copiedCodeType, setCopiedCodeType] = useState<'code' | 'link' | null>(null);
@@ -155,6 +213,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   // Trigger alert notification buzz
   const handleTriggerBuzz = (toId: string, name: string, amount: number) => {
     onSendReminder(toId, Math.abs(amount), 'Rent & Groceries Shared House Settle-up');
+    setBuzzedRoommateIds((prev) => [...prev, toId]);
     setBuzzConfirmedText(`Success! A digital reminder has been pushed to ${name} to settle RM ${Math.abs(amount).toFixed(2)}. This alert will show in their top-right notification bell!`);
     setTimeout(() => {
       setBuzzConfirmedText(null);
@@ -472,24 +531,47 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                   <MapPin className="w-3.5 h-3.5 mr-1 text-slate-400" />
                   <span>Unit: {activeGroup.houseNo}</span>
                 </div>
-                
-                {/* Leave / Delete Group operations */}
-                <div className="mt-3.5 pt-3 border-t border-slate-100 flex gap-2">
+              </div>
+
+              {/* Leave / Delete Group operations */}
+              <div className="mt-3.5 pt-3 border-t border-slate-100 space-y-3">
+                {/* Sync status feedback notification */}
+                {syncState !== 'idle' && (
+                  <div className={`p-2.5 rounded-xl text-[11px] font-sans border flex items-start gap-1.5 ${
+                    syncState === 'syncing' 
+                      ? 'bg-blue-50 border-blue-200 text-blue-850 animate-pulse' 
+                      : syncState === 'success' 
+                        ? 'bg-emerald-50 border-emerald-100 text-emerald-850 animate-none' 
+                        : 'bg-rose-50 border-rose-100 text-rose-850 animate-none'
+                  }`}>
+                    <span className="shrink-0 mt-0.5">
+                      {syncState === 'syncing' && '⏳'}
+                      {syncState === 'success' && '✅'}
+                      {syncState === 'error' && '❌'}
+                    </span>
+                    <p className="font-semibold block">{syncMessage}</p>
+                  </div>
+                )}
+
+
+
+                <div className="flex gap-2">
                   {isMember ? (
                     <button
                       type="button"
                       id="leave-active-group-btn"
                       onClick={() => {
                         if (confirm(`Confirm leaving the suite group "${activeGroup.name}"? You will no longer view or share transaction entries in this suite.`)) {
-                          onLeaveGroup?.(activeGroup.id);
+                          handleLeaveGroupWithFeedback(activeGroup.id);
                         }
                       }}
-                      className="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100/60 text-amber-700 font-bold text-[10px] rounded-lg transition-all border border-amber-200/50 cursor-pointer"
+                      disabled={syncState === 'syncing'}
+                      className="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100/60 disabled:opacity-55 text-amber-750 font-bold text-[10px] rounded-lg transition-all border border-amber-200/50 cursor-pointer flex-1 text-center"
                     >
-                      🚪 Leave Suite
+                      🚪 {syncState === 'syncing' ? 'Syncing...' : 'Leave Suite'}
                     </button>
                   ) : (
-                    <span className="px-2.5 py-1.5 bg-slate-50 text-slate-400 text-[10px] rounded-lg border border-slate-200">
+                    <span className="px-2.5 py-1.5 bg-slate-50 text-slate-400 text-[10px] rounded-lg border border-slate-200 flex-1 text-center font-medium">
                       ⚠️ Guest View
                     </span>
                   )}
@@ -499,12 +581,13 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                     id="delete-active-group-btn"
                     onClick={() => {
                       if (confirm(`⚠️ CRITICAL WARNING: Are you sure you want to completely DELETE "${activeGroup.name}"? This action cannot be undone, and all joint bills logged under this suite will be erased permanently!`)) {
-                        onDeleteGroup?.(activeGroup.id);
+                        handleDeleteGroupWithFeedback(activeGroup.id);
                       }
                     }}
-                    className="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-150/60 text-rose-700 font-bold text-[10px] rounded-lg transition-all border border-rose-200/50 cursor-pointer"
-                  >
-                    🗑️ Delete Group
+                    disabled={syncState === 'syncing'}
+                    className="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-150/60 disabled:opacity-55 text-rose-750 font-bold text-[10px] rounded-lg transition-all border border-rose-200/50 cursor-pointer flex-1 text-center"
+                    >
+                    🗑️ {syncState === 'syncing' ? 'Syncing...' : 'Delete Group'}
                   </button>
                 </div>
               </div>
@@ -544,10 +627,10 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
 
 
 
-      {/* Main dashboard content splitting splits */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      {/* Main dashboard content */}
+      <div className="w-full">
         
-        {/* Left Side: Roommate detail balances lists */}
+        {/* Roommate detail balances lists */}
         <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-xs flex flex-col justify-between">
           <div>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
@@ -592,59 +675,117 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                   <div 
                     key={member.id}
                     id={`roommate-bal-card-${member.id}`}
-                    className={`flex items-center justify-between p-3.5 rounded-2xl border transition-all ${
+                    className={`flex flex-col p-3.5 rounded-2xl border transition-all ${
                       isMe 
                         ? 'border-blue-200/50 bg-blue-50/20' 
                         : 'border-slate-100 hover:border-slate-200 bg-slate-50/40'
                     }`}
                   >
-                    <div className="flex items-center space-x-3">
-                      <div className={`w-10 h-10 rounded-xl ${member.avatarColor} text-white font-display text-sm font-bold flex items-center justify-center shadow-xs`}>
-                        {member.name[0]}
-                      </div>
-                      <div>
-                        <div className="flex items-center space-x-1.5">
-                          <span className="font-semibold text-slate-800 text-sm">
-                            {member.name}
-                          </span>
-                          {isMe && (
-                            <span className="text-[10px] bg-blue-100 text-blue-700 font-bold px-1.5 py-0.5 rounded-sm uppercase tracking-wide">
-                              You
-                            </span>
-                          )}
+                    {/* Top Row displaying primary info */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3">
+                        <div className={`w-10 h-10 rounded-xl ${member.avatarColor} text-white font-display text-sm font-bold flex items-center justify-center shadow-xs`}>
+                          {member.name[0]}
                         </div>
-                        <span className="text-xs text-slate-400 font-mono">
-                          {member.email}
-                        </span>
+                        <div>
+                          <div className="flex items-center space-x-1.5">
+                            <span className="font-semibold text-slate-800 text-sm">
+                              {member.name}
+                            </span>
+                            {isMe && (
+                              <span className="text-[10px] bg-blue-100 text-blue-700 font-bold px-1.5 py-0.5 rounded-sm uppercase tracking-wide">
+                                You
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-xs text-slate-400 font-mono">
+                            {member.email}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center space-x-3.5">
+                        <div className="text-right">
+                          <div className="text-[10px] uppercase font-mono tracking-wider text-slate-400 font-bold">
+                            Net Balance
+                          </div>
+                          <div className={`text-sm font-mono font-bold ${
+                            bal > 0.01 
+                              ? 'text-emerald-600' 
+                              : bal < -0.01 
+                                ? 'text-amber-700' 
+                                : 'text-slate-500'
+                          }`}>
+                            {bal > 0.01 ? '+' : ''}RM {bal.toFixed(2)}
+                          </div>
+                        </div>
+
+                        {bal < -0.01 && !isMe && (
+                          buzzedRoommateIds.includes(member.id) ? (
+                            <div className="p-2 bg-slate-100 text-slate-500 rounded-xl border border-slate-200 transition text-[10px] font-extrabold flex items-center justify-center gap-1 cursor-default select-none">
+                              <BellOff className="w-3.5 h-3.5 text-slate-400" />
+                              <span className="hidden sm:inline">Notified Already</span>
+                              <span className="sm:hidden">Notified</span>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => handleTriggerBuzz(member.id, member.name, bal)}
+                              className="p-2 bg-blue-50 hover:bg-blue-100 hover:text-blue-700 active:scale-95 text-blue-600 rounded-xl border border-blue-100 transition shadow-xs flex items-center justify-center cursor-pointer group"
+                              title={`Send payment push reminder to ${member.name}`}
+                            >
+                              <Bell className="w-3.5 h-3.5 col-span-1 group-hover:rotate-12 transition-transform" />
+                              <span className="text-[10px] font-bold ml-1 hidden sm:inline">Buzz</span>
+                            </button>
+                          )
+                        )}
                       </div>
                     </div>
 
-                    <div className="flex items-center space-x-3.5">
-                      <div className="text-right">
-                        <div className="text-[10px] uppercase font-mono tracking-wider text-slate-400 font-bold">
-                          Net Balance
+                    {/* Integrated dynamic Bank details section under each Roommate */}
+                    <div className="mt-3 pt-2.5 border-t border-slate-100 text-xs">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/50 p-2.5 rounded-xl border border-dashed border-slate-150">
+                        <div className="space-y-0.5 min-w-0 flex-1">
+                          <span className="text-[9px] uppercase font-mono tracking-wider text-slate-400 font-bold block">
+                            🏦 Bank Details
+                          </span>
+                          {member.bankAccount ? (
+                            <div className="text-slate-700 font-medium text-xs truncate">
+                              <span className="font-bold text-slate-800">{member.bankName || 'Maybank'}</span>:{" "}
+                              <span className="font-mono bg-white text-blue-800 border border-slate-200 px-1.5 py-0.5 rounded font-semibold text-[11px]">
+                                {member.bankAccount}
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="text-slate-400 italic text-[11px]">
+                              the user didn't put it yet
+                            </div>
+                          )}
                         </div>
-                        <div className={`text-sm font-mono font-bold ${
-                          bal > 0.01 
-                            ? 'text-emerald-600' 
-                            : bal < -0.01 
-                              ? 'text-amber-700' 
-                              : 'text-slate-500'
-                        }`}>
-                          {bal > 0.01 ? '+' : ''}RM {bal.toFixed(2)}
+
+                        <div className="sm:text-right flex flex-col sm:items-end justify-center shrink-0">
+                          <span className="text-[9px] uppercase font-mono tracking-wider text-slate-400 font-bold block mb-1">
+                            QR Photo Code
+                          </span>
+                          {member.qrCodeDataUrl ? (
+                            <button
+                              type="button"
+                              onClick={() => setSelectedQRModal({
+                                name: member.name,
+                                bank: member.bankName || 'Direct DuitNow',
+                                url: member.qrCodeDataUrl || ''
+                              })}
+                              className="inline-flex items-center gap-1 bg-white hover:bg-blue-50 text-blue-700 text-[10px] font-bold px-2 py-1 rounded-md border border-slate-200 hover:border-blue-200 transition shadow-2xs cursor-pointer"
+                            >
+                              <QrCode className="w-3.5 h-3.5 text-blue-500" />
+                              <span>View QR Code</span>
+                            </button>
+                          ) : (
+                            <span className="inline-block text-[10px] font-bold text-rose-600 bg-rose-50 border border-rose-105 px-2 py-0.5 rounded-md font-mono select-none">
+                              do not included yet
+                            </span>
+                          )}
                         </div>
                       </div>
-
-                      {bal < -0.01 && !isMe && (
-                        <button
-                          onClick={() => handleTriggerBuzz(member.id, member.name, bal)}
-                          className="p-2 bg-blue-50 hover:bg-blue-100 hover:text-blue-700 active:scale-95 text-blue-600 rounded-xl border border-blue-100 transition shadow-xs flex items-center justify-center cursor-pointer group"
-                          title={`Send payment push reminder to ${member.name}`}
-                        >
-                          <Bell className="w-3.5 h-3.5 col-span-1 group-hover:rotate-12 transition-transform" />
-                          <span className="text-[10px] font-bold ml-1 hidden sm:inline">Buzz</span>
-                        </button>
-                      )}
                     </div>
                   </div>
                 );
@@ -655,88 +796,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
           <div className="mt-6 pt-4 border-t border-slate-100 text-xs text-slate-400 flex items-center gap-1">
             <Info className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
             <span>Balances automatically compute offset of all entered expenses subtract shared split proportions.</span>
-          </div>
-        </div>
-
-        {/* Right Side: Simplified Debt Settle-up Panel */}
-        <div className="bg-slate-50 border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-xs flex flex-col justify-between">
-          <div>
-            <div className="flex items-center space-x-2 pb-4 border-b border-slate-200/60">
-              <ArrowRightLeft className="w-5 h-5 text-blue-600" />
-              <h3 className="font-display font-semibold text-lg text-slate-800">
-                Simplified Debt Settle-Up
-              </h3>
-            </div>
-
-            <p className="text-xs text-slate-500 mt-4 leading-relaxed">
-              Based on the current household expenditures, SplitMate has compiled the optimized set of payments needed to bring all members' obligations to RM 0.00:
-            </p>
-
-            {/* Settle up lists */}
-            <div className="mt-6 space-y-3">
-              {settlements.length === 0 ? (
-                <div className="flex flex-col items-center justify-center p-8 bg-white border border-slate-100 rounded-2xl text-center">
-                  <CheckCircle2 className="w-10 h-10 text-emerald-500 mb-2" />
-                  <p className="font-display font-bold text-slate-800 text-sm">House is Fully Settled!</p>
-                  <p className="text-xs text-slate-400 mt-1">No pending simplified debts exist in this pool.</p>
-                </div>
-              ) : (
-                settlements.map((settle, i) => {
-                  const fromUser = roommates.find(r => r.id === settle.fromId);
-                  const toUser = roommates.find(r => r.id === settle.toId);
-                  if (!fromUser || !toUser) return null;
-
-                  return (
-                    <div 
-                      key={i}
-                      id={`settlement-row-${i}`}
-                      className="bg-white border border-slate-100 p-4 rounded-xl flex items-center justify-between shadow-xs hover:border-blue-200 transition-all"
-                    >
-                      <div className="flex items-center space-x-3 text-xs">
-                        <span className="font-semibold text-slate-700 bg-slate-100 px-2 py-1 rounded">
-                          {fromUser.name.split(' ')[0]}
-                        </span>
-                        <span className="text-slate-400 font-bold">pays</span>
-                        <span className="font-semibold text-blue-700 bg-blue-50 px-2 py-1 rounded">
-                          {toUser.name.split(' ')[0]}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center space-x-3">
-                        <span className="font-mono text-sm font-bold text-slate-800">
-                          RM {settle.amount.toFixed(2)}
-                        </span>
-                        <button
-                          id={`quick-settle-${i}`}
-                          onClick={() => onQuickSettle(settle.fromId, settle.toId, settle.amount)}
-                          className="px-2.5 py-1 text-[10px] bg-blue-600 hover:bg-blue-700 text-white font-bold tracking-wider rounded-md uppercase cursor-pointer transition-colors"
-                        >
-                          Log Paid
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-
-          <div className="mt-6 pt-4 border-t border-slate-200/60">
-            <h5 className="font-display font-bold text-xs text-slate-700 mb-2">Example Bills Reference:</h5>
-            <div className="grid grid-cols-3 gap-2 font-mono text-[10px] text-slate-500">
-              <div className="bg-white border rounded p-2 text-center">
-                <p className="font-bold text-slate-800">Rent</p>
-                <p className="text-blue-600 mt-0.5">RM 1,200</p>
-              </div>
-              <div className="bg-white border rounded p-2 text-center">
-                <p className="font-bold text-slate-800">Groceries</p>
-                <p className="text-blue-600 mt-0.5">RM 150</p>
-              </div>
-              <div className="bg-white border rounded p-2 text-center">
-                <p className="font-bold text-slate-800">Internet</p>
-                <p className="text-blue-600 mt-0.5">RM 100</p>
-              </div>
-            </div>
           </div>
         </div>
 
@@ -761,7 +820,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
             <button
               onClick={() => {
                 setMyBankName(currentRoommate.bankName || 'Maybank');
-                setMyBankAccount(currentRoommate.bankAccount || '1140-1234-5678');
+                setMyBankAccount(currentRoommate.bankAccount || '');
                 setIsEditingBank(true);
               }}
               className="text-xs font-semibold bg-slate-50 border border-slate-200 hover:bg-slate-100 px-3 py-2 rounded-xl text-slate-700 transition cursor-pointer flex items-center gap-1.5"
@@ -794,7 +853,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                   onChange={(e) => setMyBankAccount(e.target.value)}
                   className="w-full bg-white border border-slate-200 rounded-xl text-xs p-2.5 focus:ring-1 focus:ring-blue-500 font-mono"
                   placeholder="e.g. 114022339944"
-                  required
                 />
               </div>
             </div>
@@ -822,12 +880,21 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
               <div>
                 <span className="text-[9px] font-mono font-bold text-slate-400 block uppercase">Settlement Account</span>
                 <p className="font-display font-bold text-slate-800 text-base mt-2">{currentRoommate.bankName || 'Maybank'}</p>
-                <p className="font-mono text-xs text-blue-700 font-bold bg-blue-50 py-1.5 px-3 rounded-lg border border-blue-100 mt-2 tracking-widest inline-block select-all">
-                  {currentRoommate.bankAccount || '1140-1234-5678'}
-                </p>
+                {currentRoommate.bankAccount ? (
+                  <p className="font-mono text-xs text-blue-700 font-bold bg-blue-50 py-1.5 px-3 rounded-lg border border-blue-100 mt-2 tracking-widest inline-block select-all">
+                    {currentRoommate.bankAccount}
+                  </p>
+                ) : (
+                  <span className="inline-block mt-2 text-xs italic text-rose-600 font-semibold bg-rose-50 border border-rose-100 px-2.5 py-1 rounded-md">
+                    the user didn't put it yet
+                  </span>
+                )}
               </div>
-              <div className="mt-4 pt-3 border-t border-slate-200/50 flex gap-1">
-                <span className="text-[10px] text-slate-400 font-mono">Status: Active & Verified</span>
+              <div className="mt-4 pt-3 border-t border-slate-200/50 flex gap-1 items-center">
+                <span className={`w-2 h-2 rounded-full ${currentRoommate.bankAccount ? 'bg-emerald-500' : 'bg-rose-450'}`}></span>
+                <span className="text-[10px] text-slate-400 font-mono">
+                  {currentRoommate.bankAccount ? 'Status: Active & Verified' : 'Status: Missing Account No.'}
+                </span>
               </div>
             </div>
 
@@ -934,6 +1001,48 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
 
           </div>
         )}
+      {/* QR Code Pop-up Visual Modal */}
+      {selectedQRModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-xs p-4 animate-fade-in">
+          <div className="bg-white rounded-3xl border border-slate-200 p-6 max-w-sm w-full shadow-2xl relative">
+            <button
+              onClick={() => setSelectedQRModal(null)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 font-bold text-sm bg-slate-100 hover:bg-slate-200 rounded-full w-7 h-7 flex items-center justify-center transition cursor-pointer"
+            >
+              ✕
+            </button>
+            <div className="text-center">
+              <span className="text-[10px] uppercase font-mono tracking-wider text-blue-600 bg-blue-50 px-2.5 py-1 rounded-sm font-bold">
+                DuitNow/Bank QR
+              </span>
+              <h4 className="font-display font-semibold text-base text-slate-800 mt-2.5">
+                {selectedQRModal.name}'s Payment QR
+              </h4>
+              <p className="text-xs text-slate-500 mt-1">
+                Preferred Bank/App: <span className="font-bold text-slate-800">{selectedQRModal.bank}</span>
+              </p>
+              
+              <div className="my-6 flex justify-center p-3 bg-slate-50 rounded-2xl border border-slate-150 max-w-[210px] mx-auto shadow-sm animate-pulse-once">
+                <img 
+                  src={selectedQRModal.url} 
+                  alt={`${selectedQRModal.name} Payment QR`} 
+                  referrerPolicy="no-referrer"
+                  className="rounded-xl w-44 h-44 object-contain shrink-0 shadow-xs" 
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setSelectedQRModal(null)}
+                className="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs py-2.5 rounded-xl transition cursor-pointer"
+              >
+                Acknowledge & Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       </div>
 
     </div>

@@ -38,15 +38,25 @@ export const AddExpensePage: React.FC<AddExpensePageProps> = ({
   const [category, setCategory] = useState(EXPENSE_CATEGORIES[0].name);
   const [dateStr, setDateStr] = useState(new Date().toISOString().split('T')[0]);
   const [paidById, setPaidById] = useState(currentRoommate.id);
-  const [splitWithIds, setSplitWithIds] = useState<string[]>(roommates.map(r => r.id));
+  const [splitWithIds, setSplitWithIds] = useState<string[]>([]);
   
   const [validationError, setValidationError] = useState('');
   const [isSuccess, setIsSuccess] = useState(false);
 
+  // Combine currentRoommate and active group members to ensure both are absolutely included
+  // in both the "Paid By" dropdown and "Participating in Split" checklist.
+  const allParticipatingPeople = React.useMemo(() => {
+    const list = [...roommates];
+    if (currentRoommate && !list.some(r => r.id === currentRoommate.id)) {
+      list.push(currentRoommate);
+    }
+    return list;
+  }, [roommates, currentRoommate]);
+
   // Sync split list when roommate count changes
   useEffect(() => {
-    setSplitWithIds(roommates.map(r => r.id));
-  }, [roommates]);
+    setSplitWithIds(allParticipatingPeople.map(r => r.id));
+  }, [allParticipatingPeople]);
 
   // Handle participant toggles
   const handleToggleParticipant = (id: string) => {
@@ -270,9 +280,9 @@ export const AddExpensePage: React.FC<AddExpensePageProps> = ({
                     onChange={(e) => setPaidById(e.target.value)}
                     className="pl-10 w-full bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-800 text-sm p-2.5 rounded-xl transition-all focus:outline-hidden focus:ring-2 focus:ring-blue-500 cursor-pointer"
                   >
-                    {roommates.map(user => (
+                    {allParticipatingPeople.map(user => (
                       <option key={user.id} value={user.id}>
-                        {user.id === currentRoommate.id ? `Me (${user.name})` : user.name}
+                        {user.id === currentRoommate.id ? `Me (${user.name}) [Owner]` : user.name}
                       </option>
                     ))}
                   </select>
@@ -286,7 +296,7 @@ export const AddExpensePage: React.FC<AddExpensePageProps> = ({
                 Participating in Split <span className="text-slate-400 text-[10px] lowercase italic">(Select who bears this cost)</span>
               </label>
               <div className="grid grid-cols-2 gap-2 mt-2">
-                {roommates.map((member) => {
+                {allParticipatingPeople.map((member) => {
                   const isChecked = splitWithIds.includes(member.id);
                   return (
                     <button
@@ -304,7 +314,9 @@ export const AddExpensePage: React.FC<AddExpensePageProps> = ({
                         <div className={`w-6 h-6 rounded-md ${member.avatarColor} text-white flex items-center justify-center text-[10px] font-bold`}>
                           {member.name[0]}
                         </div>
-                        <span className="text-xs font-medium text-slate-700 truncate max-w-28 sm:max-w-xs">{member.name.split(' ')[0]}</span>
+                        <span className="text-xs font-semibold text-slate-750 truncate max-w-28 sm:max-w-xs">
+                          {member.id === currentRoommate.id ? `${member.name.split(' ')[0]} (Me)` : member.name.split(' ')[0]}
+                        </span>
                       </div>
                       <div className={`w-4 h-4 rounded-full flex items-center justify-center border transition-all ${
                         isChecked 
@@ -354,7 +366,7 @@ export const AddExpensePage: React.FC<AddExpensePageProps> = ({
                     Calculated Breakdown:
                   </span>
                   <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
-                    {roommates.map((member) => {
+                    {allParticipatingPeople.map((member) => {
                       const isParticipant = splitWithIds.includes(member.id);
                       const isPayer = member.id === paidById;
 
@@ -364,7 +376,9 @@ export const AddExpensePage: React.FC<AddExpensePageProps> = ({
                             <span className={`w-4 h-4 rounded ${member.avatarColor} text-white flex items-center justify-center text-[8px] font-bold`}>
                               {member.name[0]}
                             </span>
-                            <span className="font-medium text-slate-700">{member.name.split(' ')[0]}</span>
+                            <span className="font-semibold text-slate-750">
+                              {member.id === currentRoommate.id ? `${member.name.split(' ')[0]} (Me)` : member.name.split(' ')[0]}
+                            </span>
                           </span>
                           
                           <span className="font-mono text-slate-500 font-semibold select-none text-right">

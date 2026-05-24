@@ -45,6 +45,9 @@ export interface PaymentActivity {
   status: 'pending' | 'completed';
   proofUrl?: string; // Base64, mock image, or note indicating receipt proof
   proofType?: 'receipt_slip' | 'note_statement' | 'none';
+  isOcr?: boolean;
+  ocrFileName?: string;
+  isRejected?: boolean;
 }
 
 export interface AppReminder {

@@ -152,51 +152,72 @@ export const Navbar: React.FC<NavbarProps> = ({
                         {activeUserReminders.length === 0 ? (
                           <div className="p-6 text-center text-slate-400">
                             <CheckCircle className="w-8 h-8 text-emerald-400 mx-auto mb-2 stroke-[1.5]" />
-                            <p className="text-xs font-medium text-slate-600">All paid up!</p>
-                            <p className="text-[10px] text-slate-400 mt-1">No pending settle buzzes from housemates.</p>
+                            <p className="text-xs font-semibold text-slate-600">No new notification</p>
                           </div>
                         ) : (
-                          activeUserReminders.map((rem) => (
-                            <div key={rem.id} className="p-3 hover:bg-slate-50/80 transition-colors">
-                              <div className="flex gap-2">
-                                <div className={`w-7 h-7 rounded-full shrink-0 flex items-center justify-center font-bold text-white text-xs ${getSenderColor(rem.fromId)}`}>
-                                  {getSenderName(rem.fromId)[0]}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-xs text-slate-600">
-                                    <span className="font-semibold text-slate-800">{getSenderName(rem.fromId)}</span> sent you a reminder for:
-                                  </p>
-                                  <p className="text-xs font-bold text-slate-800 my-0.5 bg-slate-50 p-1 rounded border border-slate-100 truncate">
-                                    {rem.billTitle}
-                                  </p>
-                                  <div className="flex justify-between items-end mt-1.5">
-                                    <span className="text-xs font-bold text-blue-600 font-mono">RM {rem.amount.toFixed(2)}</span>
-                                    <div className="flex gap-1.5">
-                                      <button
-                                        onClick={() => {
-                                          setCurrentPage('payment-status');
-                                          setShowNotificationMenu(false);
-                                        }}
-                                        className="text-[10px] bg-blue-600 text-white font-semibold px-2 py-0.5 rounded-md hover:bg-blue-700 active:scale-95 transition-all cursor-pointer"
-                                      >
-                                        Pay Now
-                                      </button>
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          onClearReminder(rem.id);
-                                        }}
-                                        className="text-[10px] hover:bg-slate-200 text-slate-500 font-semibold px-2 py-0.5 rounded-md transition-all cursor-pointer"
-                                        title="Dismiss reminder"
-                                      >
-                                        Dismiss
-                                      </button>
+                          activeUserReminders.map((rem) => {
+                            const hasDues = rem.amount > 0.01;
+                            const isJoinNotification = rem.id.includes('rem-join');
+
+                            return (
+                              <div key={rem.id} className="p-3 hover:bg-slate-50/80 transition-colors">
+                                <div className="flex gap-2">
+                                  <div className={`w-7 h-7 rounded-full shrink-0 flex items-center justify-center font-bold text-white text-xs ${getSenderColor(rem.fromId)}`}>
+                                    {getSenderName(rem.fromId)[0]}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-xs text-slate-600">
+                                      {isJoinNotification ? (
+                                        <span className="font-semibold text-slate-800">🎉 Suite Activity Notice</span>
+                                      ) : rem.billTitle.includes('⚠️') || rem.billTitle.toLowerCase().includes('untrusted') ? (
+                                        <span className="font-bold text-rose-600 flex items-center gap-1">❌ Proof Verification Failure</span>
+                                      ) : (
+                                        <>
+                                          <span className="font-semibold text-slate-800">{getSenderName(rem.fromId)}</span> sent you a reminder for:
+                                        </>
+                                      )}
+                                    </p>
+                                    <p className="text-xs font-bold text-slate-800 my-0.5 bg-slate-50 p-1 rounded border border-slate-100 truncate">
+                                      {rem.billTitle}
+                                    </p>
+                                    <div className="flex justify-between items-end mt-1.5">
+                                      {hasDues ? (
+                                        <>
+                                          <span className="text-xs font-bold text-slate-600 font-mono">RM {rem.amount.toFixed(2)}</span>
+                                          <div className="flex gap-1.5">
+                                            <button
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                onClearReminder(rem.id);
+                                              }}
+                                              className="text-[10px] hover:bg-slate-200 bg-slate-100 text-slate-700 font-bold px-2 py-0.5 rounded-md transition-all cursor-pointer border border-slate-200"
+                                              title="Dismiss reminder"
+                                            >
+                                              Dismiss
+                                            </button>
+                                          </div>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <span className="text-[10px] text-emerald-600 font-semibold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100">✨ Joined Suite</span>
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              onClearReminder(rem.id);
+                                            }}
+                                            className="text-[10px] hover:bg-slate-200 text-slate-500 font-bold px-2 py-0.5 rounded-md transition-all cursor-pointer border border-slate-200"
+                                            title="Clear notification"
+                                          >
+                                            Acknowledge
+                                          </button>
+                                        </>
+                                      )}
                                     </div>
                                   </div>
                                 </div>
                               </div>
-                            </div>
-                          ))
+                            );
+                          })
                         )}
                       </div>
                       <div className="px-3 pt-2 pb-1 border-t border-slate-100 bg-slate-50/30 text-center">
