@@ -4,6 +4,7 @@
  */
 
 import { useState, useEffect } from 'react';
+import { supabase } from './supabaseClient';
 import { Navbar } from './components/Navbar';
 import { LoginPage } from './components/LoginPage';
 import { DashboardPage } from './components/DashboardPage';
@@ -19,92 +20,68 @@ import {
 } from './utils/calculations';
 
 export default function App() {
-  // Page Location routing
-  const [currentPage, setCurrentPage] = useState<AppPage>(() => {
-    return localStorage.getItem('splitmate_current_page')|| 'login';
-  });
+ const [currentPage, setCurrentPage] = useState<AppPage>('login');
+const [roommates, setRoommates] = useState<Roommate[]>([]);
+const [groups, setGroups] = useState<Group[]>([]);
+const [activeGroupId, setActiveGroupId] = useState<string>('');
+const [expenses, setExpenses] = useState<Expense[]>([]);
+const [payments, setPayments] = useState<PaymentActivity[]>([]);
+const [currentRoommateId, setCurrentRoommateId] = useState<string | null>(null);
+const [reminders, setReminders] = useState<AppReminder[]>([]);
 
-  // Master lists and active selectors
-  const [roommates, setRoommates] = useState<Roommate[]>(() => {
-  const saved = localStorage.getItem('splitmate_roommates');
-  const parsed: Roommate[] = saved ? JSON.parse(saved) : [];
-    return parsed.map((r) => ({
-      ...r,
-      username: r.username || (r.name || 'user').toLowerCase().replace(/[^a-z0-9]/g, '') || `user-${r.id}`,
-      password: r.password || 'password',
-    }));
-  });
+// Load all data from Supabase on startup
+useEffect(() => {
+  const loadAll = async () => {
+    const [{ data: rm }, { data: gr }, { data: ex }, { data: pay }, { data: rem }] = await Promise.all([
+      supabase.from('roommates').select('*'),
+      supabase.from('groups').select('*'),
+      supabase.from('expenses').select('*'),
+      supabase.from('payments').select('*'),
+      supabase.from('reminders').select('*'),
+    ]);
 
-  const [groups, setGroups] = useState<Group[]>(() => {
-  const savedGroups = localStorage.getItem("splitmate_groups")
-  return savedGroups ? JSON.parse(savedGroups) : [];
-  });
+    if (rm) setRoommates(rm.map((r) => ({
+      id: r.id, name: r.name, username: r.username, password: r.password,
+      avatarColor: r.avatar_color, bankName: r.bank_name, bankAccount: r.bank_account,
+      qrType: r.qr_type, qrCodeDataUrl: r.qr_code_data_url,
+    })));
 
-  const [activeGroupId, setActiveGroupId] = useState<string>(() => {
-    return localStorage.getItem('splitmate_active_group_id')|| '';
-  });
+    if (gr) setGroups(gr.map((g) => ({
+      id: g.id, name: g.name, type: g.type, houseNo: g.house_no,
+      roommateIds: g.roommate_ids, joinCode: g.join_code,
+    })));
 
-  const [expenses, setExpenses] = useState<Expense[]>(() => {
-    const saved = localStorage.getItem('splitmate_expenses');
-    return saved ? JSON.parse(saved) : [];
-  });
+    if (ex) setExpenses(ex.map((e) => ({
+      id: e.id, title: e.title, amount: e.amount, date: e.date,
+      category: e.category, paidById: e.paid_by_id, splitWithIds: e.split_with_ids,
+    })));
 
-  const [payments, setPayments] = useState<PaymentActivity[]>(() => {
-    const saved = localStorage.getItem('splitmate_payments');
-    return saved ? JSON.parse(saved) : [];
-  });
+    if (pay) setPayments(pay.map((p) => ({
+      id: p.id, fromId: p.from_id, toId: p.to_id, amount: p.amount,
+      date: p.date, note: p.note, status: p.status, proofUrl: p.proof_url,
+      proofType: p.proof_type, isOcr: p.is_ocr, ocrFileName: p.ocr_file_name,
+      isRejected: p.is_rejected,
+    })));
 
-  const [currentRoommateId, setCurrentRoommateId] = useState<string | null>(() => {
-    return localStorage.getItem('splitmate_current_user_id') || '';
-  });
+    if (rem) setReminders(rem.map((r) => ({
+      id: r.id, fromId: r.from_id, toId: r.to_id, amount: r.amount,
+      date: r.date, billTitle: r.bill_title, isRead: r.is_read,
+    })));
 
-  // App Reminders state
-  const [reminders, setReminders] = useState<AppReminder[]>(() => {
-    const saved = localStorage.getItem('splitmate_reminders');
-    if (saved) return JSON.parse(saved);
-    // Initial defaults
-    return [
-      { id: 'rem-1', fromId: '3', toId: '1', amount: 25.00, date: '2026-05-23', billTitle: 'High-speed Internet Premium Broadband', isRead: false },
-      { id: 'rem-2', fromId: '2', toId: '1', amount: 37.50, date: '2026-05-22', billTitle: 'Groceries Restocking Refills', isRead: false }
-    ];
-  });
-
-  // Persistence hooks sync
-  useEffect(() => {
-    localStorage.setItem('splitmate_roommates', JSON.stringify(roommates));
-  }, [roommates]);
-
-  useEffect(() => {
-    localStorage.setItem('splitmate_groups', JSON.stringify(groups));
-  }, [groups]);
+    // Restore last logged in user
+    const savedUserId = localStorage.getItem('splitmate_current_user_id');
+    if (savedUserId) setCurrentRoommateId(savedUserId);
+  };
+  loadAll();
+}, []); 
 
   useEffect(() => {
-    localStorage.setItem('splitmate_active_group_id', activeGroupId);
-  }, [activeGroupId]);
-
-  useEffect(() => {
-    localStorage.setItem('splitmate_expenses', JSON.stringify(expenses));
-  }, [expenses]);
-
-  useEffect(() => {
-    localStorage.setItem('splitmate_payments', JSON.stringify(payments));
-  }, [payments]);
-
-  useEffect(() => {
-    localStorage.setItem('splitmate_reminders', JSON.stringify(reminders));
-  }, [reminders]);
-
-  useEffect(() => {
-    if (currentRoommateId) {
-      localStorage.setItem('splitmate_current_user_id', currentRoommateId);
-    } else {
-      localStorage.removeItem('splitmate_current_user_id');
-    }
-  }, [currentRoommateId]);
-
-  useEffect(() => {
-    localStorage.setItem('splitmate_current_page', currentPage);
-  }, [currentPage]);
+  if (currentRoommateId) {
+    localStorage.setItem('splitmate_current_user_id', currentRoommateId);
+  } else {
+    localStorage.removeItem('splitmate_current_user_id');
+  }
+}, [currentRoommateId]);
 
   // Find active data records based on states
   const currentRoommate = roommates.find((r) => r.id === currentRoommateId) || null;
@@ -235,23 +212,26 @@ export default function App() {
       return null;
     }
   };
-  const handleCreateGroup = (name: string, type: 'roommates' | 'housemates', houseNo: string) => {
+  const handleCreateGroup = async (name: string, type: 'roommates' | 'housemates', houseNo: string) => {
   const prefix = name.replace(/[^a-zA-Z]/g, '').substring(0, 4).toUpperCase() || 'GRP';
   const randNum = Math.floor(100 + Math.random() * 900);
   const joinCode = `${prefix}-${randNum}`;
 
   const newGroup: Group = {
     id: `grp-${Date.now()}`,
-    name,
-    type,
-    houseNo,
+    name, type, houseNo,
     roommateIds: currentRoommateId ? [currentRoommateId] : [],
     joinCode,
   };
 
+  await supabase.from('groups').insert({
+    id: newGroup.id, name: newGroup.name, type: newGroup.type,
+    house_no: newGroup.houseNo, roommate_ids: newGroup.roommateIds,
+    join_code: newGroup.joinCode,
+  });
+
   setGroups((prev) => [...prev, newGroup]);
   setActiveGroupId(newGroup.id);
-  pushGroupToCloud(newGroup); // ← ADD THIS LINE
 };
 
   const handleSelectGroup = (groupId: string) => {
@@ -262,17 +242,19 @@ export default function App() {
   const handleLeaveGroup = (groupId: string) => {
   if (!currentRoommateId) return;
 
-  setGroups((prev) => {
-    const updatedGroups = prev.map((g) =>
-      g.id === groupId
-        ? {
-            ...g,
-            roommateIds: g.roommateIds.filter(
-              (id) => id !== currentRoommateId
-            ),
-          }
-        : g
-    );
+  const updatedIds = [...targetGroup.roommateIds, currentRoommateId];
+
+await supabase.from('groups')
+  .update({ roommate_ids: updatedIds })
+  .eq('id', targetGroup.id);
+
+setGroups((prev) =>
+  prev.map((g) =>
+    g.id === targetGroup.id
+      ? { ...g, roommateIds: updatedIds }
+      : g
+  )
+);
 
     const remainingGroups = updatedGroups.filter((g) =>
       g.roommateIds.includes(currentRoommateId)
@@ -366,43 +348,23 @@ export default function App() {
   return { success: true };
 };
 
-  // Register clean profile with username & password
-  const handleRegisterRoommate = (
-    name: string,
-    username: string,
-    password: string,
-    avatarColor: string
-  ) => {
-    // ADD HERE
-  const existingUser = roommates.find(
-    (u) =>
-      u.username.trim().toLowerCase() ===
-      username.trim().toLowerCase()
-  );
+  const handleRegisterRoommate = async (
+  name: string, username: string, password: string, avatarColor: string
+) => {
+  ...
+  await supabase.from('roommates').insert({
+    id: newPersonId, name, username: username.toLowerCase().trim(),
+    password: password || 'password', avatar_color: avatarColor,
+    bank_name: 'Maybank', bank_account: '', qr_type: 'duitnow',
+  });
 
-  if (existingUser) {
-    alert("Username already exists.");
-    return;
-  }
-    const newPersonId = `usr-${Date.now()}`;
-    const newPerson: Roommate = {
-      id: newPersonId,
-      name,
-      username: username.toLowerCase().trim(),
-      password: password || 'password',
-      avatarColor,
-      bankName: 'Maybank',
-      bankAccount: '',
-      qrType: 'duitnow'
-    };
-
-    setRoommates((prev) => [...prev, newPerson]);
-    setCurrentRoommateId(newPersonId);
-    setCurrentPage('dashboard');
-  };
+  setRoommates((prev) => [...prev, newPerson]);
+  setCurrentRoommateId(newPersonId);
+  setCurrentPage('dashboard');
+};
 
   // Expense Modifiers
-  const handleAddExpense = (
+  const handleAddExpense = async (
     title: string,
     amount: number,
     date: string,
@@ -420,7 +382,11 @@ export default function App() {
       splitWithIds,
     };
 
-    setExpenses((prev) => [newExpense, ...prev]);
+    await supabase.from('expenses').insert({
+  id: newExpense.id, title, amount, date, category,
+  paid_by_id: paidById, split_with_ids: splitWithIds,
+});
+setExpenses((prev) => [newExpense, ...prev]);
   };
 
   const handleDeleteExpense = (expenseId: string) => {
@@ -428,7 +394,7 @@ export default function App() {
   };
 
   // Payment Transfers Modifiers
-  const handleAddPayment = (
+  const handleAddPayment = async (
     fromId: string,
     toId: string,
     amount: number,
@@ -454,7 +420,12 @@ export default function App() {
       isRejected: false
     };
 
-    setPayments((prev) => [newPayment, ...prev]);
+    await supabase.from('payments').insert({
+  id: newPayment.id, from_id: fromId, to_id: toId, amount, date, note, status,
+  proof_type: newPayment.proofType, proof_url: newPayment.proofUrl,
+  is_ocr: newPayment.isOcr, ocr_file_name: ocrFileName, is_rejected: false,
+});
+setPayments((prev) => [newPayment, ...prev]);
 
     // If others paid the owner, notify only the owner of the money
     if (fromId !== toId) {
