@@ -191,29 +191,29 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
 
 
   // Handles join group click
-  const handleJoinGroupClick = (e: React.FormEvent) => {
-    e.preventDefault();
-    setJoinError('');
-    setJoinSuccess(false);
+  const handleJoinGroupClick = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setJoinError('');
+  setJoinSuccess(false);
 
-    if (!joinCodeInput.trim()) {
-      setJoinError('Suite invitation code is required.');
-      return;
-    }
+  if (!joinCodeInput.trim()) {
+    setJoinError('Suite invitation code is required.');
+    return;
+  }
 
-    const res = onJoinGroup(joinCodeInput.trim()) as { success: boolean; error?: string; alreadyJoined?: boolean };
-    if (res.success) {
-      if (res.alreadyJoined) {
-        setJoinError('ℹ️ You are already a member of this suite group!');
-      } else {
-        setJoinSuccess(true);
-        setJoinCodeInput('');
-        setTimeout(() => setJoinSuccess(false), 5000);
-      }
+  const res = await onJoinGroup(joinCodeInput.trim());
+  if (res.success) {
+    if (res.alreadyJoined) {
+      setJoinError('ℹ️ You are already a member of this suite group!');
     } else {
-      setJoinError(res.error || 'Could not join suite.');
+      setJoinSuccess(true);
+      setJoinCodeInput('');
+      setTimeout(() => setJoinSuccess(false), 5000);
     }
-  };
+  } else {
+    setJoinError(res.error || 'Could not join suite.');
+  }
+};
 
   // Trigger alert notification buzz
   const handleTriggerBuzz = (toId: string, name: string, amount: number) => {

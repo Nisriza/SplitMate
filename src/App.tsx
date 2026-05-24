@@ -231,7 +231,7 @@ useEffect(() => {
 
   setActiveGroupId(remainingGroups.length > 0 ? remainingGroups[0].id : '');
 };
-};
+
 
   // Delete Group
   const handleDeleteGroup = async (groupId: string) => {
@@ -474,8 +474,8 @@ setPayments((prev) => [newPayment, ...prev]);
       prev.map((payment) =>
         payment.id === paymentId ? { ...payment, status: 'completed' } : payment
       )
-    );
-  };
+    );};
+  
 
   const handleDeletePayment = (paymentId: string) => {
     setPayments((prev) => prev.filter((p) => p.id !== paymentId));
@@ -581,3 +581,4 @@ setPayments((prev) => [newPayment, ...prev]);
 
     </div>
   );
+}
