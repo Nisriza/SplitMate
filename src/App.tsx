@@ -12,12 +12,7 @@ import { AddExpensePage } from './components/AddExpensePage';
 import { ExpenseSummaryPage } from './components/ExpenseSummaryPage';
 import { PaymentStatusPage } from './components/PaymentStatusPage';
 import { Roommate, Group, Expense, PaymentActivity, AppPage, AppReminder } from './types';
-import { 
-  INITIAL_ROOMMATES, 
-  INITIAL_GROUPS, 
-  INITIAL_EXPENSES, 
-  INITIAL_PAYMENTS 
-} from './utils/calculations';
+
 
 export default function App() {
  const [currentPage, setCurrentPage] = useState<AppPage>('login');
@@ -144,19 +139,26 @@ useEffect(() => {
   };
 
   // Send Push Reminder notification to another roomie
-  const handleSendReminder = (toId: string, amount: number, billTitle?: string) => {
-    if (!currentRoommateId) return;
-    const newRem: AppReminder = {
-      id: `rem-${Date.now()}`,
-      fromId: currentRoommateId,
-      toId,
-      amount,
-      billTitle: billTitle || 'Settle general shared balances',
-      date: new Date().toISOString().split('T')[0],
-      isRead: false,
-    };
-    setReminders((prev) => [newRem, ...prev]);
+  const handleSendReminder = async (toId: string, amount: number, billTitle?: string) => {
+  if (!currentRoommateId) return;
+  const newRem: AppReminder = {
+    id: `rem-${Date.now()}`,
+    fromId: currentRoommateId,
+    toId,
+    amount,
+    billTitle: billTitle || 'Settle general shared balances',
+    date: new Date().toISOString().split('T')[0],
+    isRead: false,
   };
+
+  await supabase.from('reminders').insert({
+    id: newRem.id, from_id: newRem.fromId, to_id: newRem.toId,
+    amount: newRem.amount, date: newRem.date,
+    bill_title: newRem.billTitle, is_read: false,
+  });
+
+  setReminders((prev) => [newRem, ...prev]);
+};
 
   const handleClearReminder = (remId: string) => {
     setReminders((prev) => prev.filter((r) => r.id !== remId));
@@ -178,40 +180,6 @@ useEffect(() => {
     }
   }, [groups]);
 
-  // Group modifiers
-   const JSONBIN_KEY = '$2a$10$YOUR_API_KEY_HERE'; // ← replace with your key from jsonbin.io
-
-  const pushGroupToCloud = async (group: Group) => {
-    try {
-      await fetch('https://api.jsonbin.io/v3/b', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Master-Key': JSONBIN_KEY,
-          'X-Bin-Name': `splitmate-group-${group.joinCode}`,
-        },
-        body: JSON.stringify(group),
-      });
-    } catch (e) {
-      console.error('Failed to push group to cloud', e);
-    }
-  };
-
-  const fetchGroupFromCloud = async (joinCode: string): Promise<Group | null> => {
-    try {
-      const res = await fetch('https://api.jsonbin.io/v3/b/latest', {
-        headers: {
-          'X-Master-Key': JSONBIN_KEY,
-          'X-Bin-Name': `splitmate-group-${joinCode}`,
-        },
-      });
-      if (!res.ok) return null;
-      const data = await res.json();
-      return data.record as Group;
-    } catch {
-      return null;
-    }
-  };
   const handleCreateGroup = async (name: string, type: 'roommates' | 'housemates', houseNo: string) => {
   const prefix = name.replace(/[^a-zA-Z]/g, '').substring(0, 4).toUpperCase() || 'GRP';
   const randNum = Math.floor(100 + Math.random() * 900);
@@ -239,52 +207,43 @@ useEffect(() => {
   };
 
   // Leave Group
-  const handleLeaveGroup = (groupId: string) => {
+  const handleLeaveGroup = async (groupId: string) => {
   if (!currentRoommateId) return;
 
-  const updatedIds = [...targetGroup.roommateIds, currentRoommateId];
+  const targetGroup = groups.find((g) => g.id === groupId);
+  if (!targetGroup) return;
 
-await supabase.from('groups')
-  .update({ roommate_ids: updatedIds })
-  .eq('id', targetGroup.id);
+  const updatedIds = targetGroup.roommateIds.filter((id) => id !== currentRoommateId);
 
-setGroups((prev) =>
-  prev.map((g) =>
-    g.id === targetGroup.id
-      ? { ...g, roommateIds: updatedIds }
-      : g
-  )
-);
+  await supabase.from('groups')
+    .update({ roommate_ids: updatedIds })
+    .eq('id', groupId);
 
-    const remainingGroups = updatedGroups.filter((g) =>
-      g.roommateIds.includes(currentRoommateId)
-    );
+  const updatedGroups = groups.map((g) =>
+    g.id === groupId ? { ...g, roommateIds: updatedIds } : g
+  );
 
-    setActiveGroupId(
-      remainingGroups.length > 0 ? remainingGroups[0].id : ""
-    );
+  setGroups(updatedGroups);
 
-    return updatedGroups;
-  });
+  const remainingGroups = updatedGroups.filter((g) =>
+    g.roommateIds.includes(currentRoommateId)
+  );
+
+  setActiveGroupId(remainingGroups.length > 0 ? remainingGroups[0].id : '');
+};
 };
 
   // Delete Group
-  const handleDeleteGroup = (groupId: string) => {
-  setGroups((prev) => {
-    const updatedGroups = prev.filter((g) => g.id !== groupId);
+  const handleDeleteGroup = async (groupId: string) => {
+  await supabase.from('groups').delete().eq('id', groupId);
 
-    const remainingGroups = updatedGroups.filter((g) =>
-      currentRoommateId
-        ? g.roommateIds.includes(currentRoommateId)
-        : false
-    );
+  const updatedGroups = groups.filter((g) => g.id !== groupId);
+  const remainingGroups = updatedGroups.filter((g) =>
+    currentRoommateId ? g.roommateIds.includes(currentRoommateId) : false
+  );
 
-    setActiveGroupId(
-      remainingGroups.length > 0 ? remainingGroups[0].id : ""
-    );
-
-    return updatedGroups;
-  });
+  setGroups(updatedGroups);
+  setActiveGroupId(remainingGroups.length > 0 ? remainingGroups[0].id : '');
 };
 
   // Join group by invite code and notify all other roomies
@@ -318,14 +277,20 @@ setGroups((prev) =>
     return { success: true, alreadyJoined: true };
   }
 
-  setGroups((prev) =>
-    prev.map((g) =>
-      g.id === targetGroup!.id
-        ? { ...g, roommateIds: [...g.roommateIds, currentRoommateId] }
-        : g
-    )
-  );
-  setActiveGroupId(targetGroup.id);
+  const updatedIds = [...targetGroup.roommateIds, currentRoommateId];
+
+await supabase.from('groups')
+  .update({ roommate_ids: updatedIds })
+  .eq('id', targetGroup.id);
+
+setGroups((prev) =>
+  prev.map((g) =>
+    g.id === targetGroup!.id
+      ? { ...g, roommateIds: updatedIds }
+      : g
+  )
+);
+setActiveGroupId(targetGroup.id);
 
   // Notify other roommates
   const otherRoommateIds = targetGroup.roommateIds;
@@ -351,7 +316,27 @@ setGroups((prev) =>
   const handleRegisterRoommate = async (
   name: string, username: string, password: string, avatarColor: string
 ) => {
-  ...
+  const existingUser = roommates.find(
+    (u) => u.username.trim().toLowerCase() === username.trim().toLowerCase()
+  );
+
+  if (existingUser) {
+    alert('Username already exists.');
+    return;
+  }
+
+  const newPersonId = `usr-${Date.now()}`;
+  const newPerson: Roommate = {
+    id: newPersonId,
+    name,
+    username: username.toLowerCase().trim(),
+    password: password || 'password',
+    avatarColor,
+    bankName: 'Maybank',
+    bankAccount: '',
+    qrType: 'duitnow',
+  };
+
   await supabase.from('roommates').insert({
     id: newPersonId, name, username: username.toLowerCase().trim(),
     password: password || 'password', avatar_color: avatarColor,
